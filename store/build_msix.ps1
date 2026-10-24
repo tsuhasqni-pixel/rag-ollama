@@ -11,6 +11,7 @@ $extra=@()
 foreach ($f in @('index.html','app.js','diary_recall.js','style.css')) {
     if (Test-Path $f) { $extra+=@('--add-data', "$f;.") }
 }
+$extra+=@('--add-data','store/model_picker.js;store')
 $pyArgs=@('-m','PyInstaller','--noconfirm','--clean','--windowed','--onedir',
     '--name',$AppName,'--paths','.','--collect-all','webview')+$extra+
     @('store/windows_launcher.py')
