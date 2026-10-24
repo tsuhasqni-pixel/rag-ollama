@@ -27,6 +27,10 @@ select,input[type=date]{width:100%;background:white;border:1px solid #cbd7e4;pad
 .privacy-warning{background:#fff9ec;border:1px solid #efe1bd;border-radius:10px;padding:10px 14px;color:#6b5b3c;font-size:11px;margin-top:12px}
 @media(max-width:620px){.field-grid{grid-template-columns:1fr}}
 
+
+.local-ai-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0 12px;font-size:11px;color:var(--muted)}
+.local-ai-status button{padding:7px 11px;background:#f5f8fb;border:1px solid var(--line);font-weight:600}
+
 </style></head><body><div class="shell"><header class="top"><div><div class="logo">folio <span style="color:#7c98b4;font:400 12px sans-serif">/ personal knowledge</span></div><div class="subtitle">自分の資料を、自分のPCで検索する。</div></div><span class="pill">● ローカル動作</span></header>
 <section class="hero"><span class="eyebrow">YOUR PRIVATE KNOWLEDGE BASE</span><h1>必要な情報が、すぐ見つかる。</h1><p>AIがなくても言葉で検索。Ollamaが使えるときだけ、資料を元にした回答も作れます。</p></section>
 <div id="message" role="status" aria-live="polite"></div><div class="layout"><div>
@@ -36,7 +40,7 @@ select,input[type=date]{width:100%;background:white;border:1px solid #cbd7e4;pad
 <label>開始日（任意）<input id="dateFrom" type="date"></label>
 <label>終了日（任意）<input id="dateTo" type="date"></label></div>
 <p class="note">選んだ種類と日付で絞り込みます。現段階はキーワードの一致検索なので、日付・記録にないことは答えられません。</p><div id="results" aria-live="polite"><p class="hint">ここに検索結果が表示されます。</p></div></section>
-<section class="panel"><div class="row" style="justify-content:space-between"><h2>2. AIで資料に質問（任意）</h2><span class="badge">Ollama optional</span></div><div class="ai"><label>モデル名<input id="model" value="qwen3:4b" placeholder="例：qwen3:4b"></label><p class="note">検索で見つかった資料の抜粋3件だけをローカルOllamaに渡します。AIを使わない場合は検索だけで完結します。</p><button id="ask">検索結果から回答を生成する</button><pre id="answer"></pre><div id="sourceList" aria-live="polite"></div></div></section>
+<section class="panel"><div class="row" style="justify-content:space-between"><h2>2. AIで資料に質問（任意）</h2><span class="badge">Ollama optional</span></div><div class="ai"><label>モデル名<input id="model" value="qwen3:4b" placeholder="例：qwen3:4b"></label><p class="note">検索で見つかった資料の抜粋3件だけをローカルOllamaに渡します。AIを使わない場合は検索だけで完結します。</p><div class="local-ai-status"><button id="checkAi" type="button" aria-describedby="aiStatus">接続を確認</button><span id="aiStatus" aria-live="polite">Ollama：未確認（検索は利用できます）</span></div><button id="ask">検索結果から回答を生成する</button><pre id="answer"></pre><div id="sourceList" aria-live="polite"></div></div></section>
 </div><aside><section class="panel"><h2>3. 記録・資料を追加する</h2><p class="note">利用者自身が内容・分類・日付を選んで保存します。用途を限定せず、端末外への自動同期もしません。</p><label>ファイルから追加<input id="file" type="file" accept=".txt,.md,.csv,.json,text/plain"></label><div class="field-grid">
 <label>記録の種類<select id="category"><option>メモ・記録</option><option>資料・書類</option><option>数値・表</option><option selected>その他</option></select></label>
 <label>記録した日<input type="date" id="eventDate"></label></div>
@@ -102,6 +106,21 @@ async function find(){
 }
 $('search').addEventListener('click',find);
 $('query').addEventListener('keydown',e=>{if(e.key==='Enter')find();});
+$('checkAi').addEventListener('click',async()=>{
+  const btn=$('checkAi'), label=$('aiStatus');
+  btn.disabled=true;label.textContent='Ollama：接続を確認中…';
+  try{
+    const state=await api('/api/status',{});
+    if(state.available){
+      const models=(state.models||[]).slice(0,4);
+      label.textContent='Ollama：接続可能'+(models.length?'（'+models.join('、')+'）':'（モデル未登録）');
+    }else{
+      label.textContent='Ollama：未接続。通常の検索は利用できます。';
+    }
+  }catch(error){
+    label.textContent='Ollama：確認できません。通常の検索は利用できます。';
+  }finally{btn.disabled=false;}
+});
 $('ask').addEventListener('click',async()=>{
   if(!hits.length){msg('先に資料を検索してください。',true);return;}
   $('answer').textContent='ローカルAIが回答を生成中…';$('sourceList').replaceChildren();
