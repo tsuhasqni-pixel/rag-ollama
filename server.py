@@ -34,11 +34,13 @@ def connect():
 def add_document(title: str, content: str) -> int:
     title=title.strip()[:160];content=content.strip()[:1_500_000]
     if not title or not content: raise ValueError("資料名と文章が必要です。")
-    with connect() as con:
+    con=connect()
+    try:
         cursor=con.execute("INSERT INTO docs (title,content,created_at) VALUES (?,?,?)",
             (title,content,datetime.now(timezone.utc).isoformat()))
         con.commit()
         return int(cursor.lastrowid)
+    finally: con.close()
 
 def search(query: str, limit: int = 20) -> list[dict]:
     words=[x for x in re.split(r"\s+",query.strip().casefold()) if x][:10]
@@ -63,10 +65,12 @@ def search(query: str, limit: int = 20) -> list[dict]:
 def read_excerpt(ids: list[int]) -> str:
     if not ids:return ""
     chunks=[]
-    with connect() as con:
+    con=connect()
+    try:
         for identifier in ids[:3]:
             doc=con.execute("SELECT title,content FROM docs WHERE id=?",(identifier,)).fetchone()
             if doc:chunks.append("【"+doc["title"][:120]+"】\n"+doc["content"][:1600])
+    finally: con.close()
     return "\n\n".join(chunks)
 
 def ollama_summary(query: str, refs: list[int], model: str) -> str:
