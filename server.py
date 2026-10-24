@@ -15,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 from datetime import datetime, timezone
+from store.ollama_manager import MANAGER
 
 BASE = Path(os.getenv("RAG_OLLAMA_DATA_DIR", str(Path.home() / ".rag-ollama")))
 DB = BASE / "library.sqlite3"
@@ -250,7 +251,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length",str(len(raw)));self.end_headers();self.wfile.write(raw)
     def do_POST(self):
         path=urlsplit(self.path).path
-        if path not in ("/api/add","/api/search","/api/ask","/api/list","/api/delete","/api/status","/api/get"):
+        if path not in ("/api/add","/api/search","/api/ask","/api/list","/api/delete","/api/status","/api/get","/api/catalog","/api/pull","/api/pull/status"):
             return self.json_response(404,{"error":"見つかりません"})
         host=self.headers.get("Host","").split(":")[0]
         origin=self.headers.get("Origin")
@@ -271,6 +272,15 @@ class Handler(BaseHTTPRequestHandler):
                     date_from=obj.get("date_from") or "",date_to=obj.get("date_to") or "")}
             elif path=="/api/list":
                 result={"records":list_documents(category=obj.get("category") or "")}
+            elif path=="/api/catalog":
+                result=MANAGER.catalog()
+            elif path=="/api/pull/status":
+                result=MANAGER.status()
+            elif path=="/api/pull":
+                model=obj.get("model")
+                if not isinstance(model,str):
+                    raise ValueError("モデルを選んでください。")
+                result=MANAGER.start(model)
             elif path=="/api/status":
                 result=ollama_status()
             elif path=="/api/get":
