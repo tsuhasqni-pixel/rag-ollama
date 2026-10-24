@@ -1,0 +1,45 @@
+name: Offline RAG Windows QA
+on:
+  push:
+    branches: [codex/offline-products-20261024]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify no-AI retrieval
+        shell: pwsh
+        run: |
+          python -m compileall -q server.py
+          if ($LASTEXITCODE -ne 0) { throw 'Python compilation failed' }
+          python -m unittest discover -s tests -p test_rag.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Local RAG search QA failed' }
+      - name: Install test-only browser automation
+        shell: pwsh
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          if ($LASTEXITCODE -ne 0) { throw 'Browser test dependency failed' }
+      - name: Verify the Japanese search UI in Edge
+        shell: pwsh
+        run: |
+          node tests/ui_qa.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Browser search QA failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: folio-ui-screenshots
+          path: qa-screenshots/*.png
+          if-no-files-found: warn
+
+

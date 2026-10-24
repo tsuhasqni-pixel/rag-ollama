@@ -1,0 +1,221 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>folio｜ローカル資料検索</title><style>
+:root{color-scheme:light;--bg:#f2f4f6;--paper:#fff;--ink:#203247;--line:#dce2e9;--blue:#315f9b;--muted:#6c7d8e}
+*{box-sizing:border-box}body{margin:0;font:14px/1.7 -apple-system,BlinkMacSystemFont,"Noto Sans JP",sans-serif;background:var(--bg);color:var(--ink)}
+.shell{max-width:1180px;padding:0 28px 60px;margin:auto}.top{display:flex;justify-content:space-between;gap:12px;padding:25px 0;border-bottom:1px solid var(--line)}
+.logo{font:700 29px Georgia,serif;color:#173b68;letter-spacing:-.05em}.subtitle{font-size:12px;color:var(--muted)}.pill{align-self:center;border:1px solid #afc9bc;padding:5px 13px;border-radius:30px;color:#2b6951;font-size:11px}
+.hero{margin:33px 0 22px;padding:30px 34px;background:linear-gradient(120deg,#213f64,#426e9b);color:white;border-radius:18px}
+.hero h1{font-size:clamp(23px,3vw,36px);line-height:1.4;margin:7px 0}.hero p{color:#e4eaf5;margin:0}.eyebrow{font-weight:800;font-size:10px;letter-spacing:.2em;color:#d9dfaf}
+.layout{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(300px,.85fr);gap:18px}.panel{background:white;padding:23px;border:1px solid var(--line);border-radius:14px;margin-bottom:16px;min-width:0}
+h2{font-size:16px;margin:0 0 15px}h3{font-size:13px;margin:0 0 7px}.note{color:var(--muted);font-size:12px;margin:0 0 13px}
+input,textarea{font:inherit;width:100%;background:white;padding:12px 14px;border:1px solid #cbd7e4;border-radius:9px;outline-offset:2px}
+textarea{resize:vertical;min-height:105px}label{display:block;font-size:12px;font-weight:700;margin:10px 0}
+label input,label textarea{margin-top:7px}button{font:700 12px inherit;cursor:pointer;border:1px solid #b9ccdc;border-radius:9px;background:#f2f7ff;padding:11px 15px;color:#315d8f}
+button.primary{color:white;background:#315f9b;border-color:#315f9b}button:hover{filter:brightness(.96)}button:focus-visible,input:focus-visible{outline:2px solid #61a0d5;outline-offset:2px}
+.row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.search{display:flex;gap:10px}.search input{flex:1}.result{border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:10px}.result b{font-size:13px}.result p{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--muted);font-size:12px;margin:6px 0}.result .meta{font-size:11px;color:#5788ae}.hint{padding:18px 14px;color:var(--muted);background:#f7f9fb;border-radius:10px;font-size:12px}.badge{font-size:10px;color:#4b6c8f;padding:2px 8px;background:#e9f2fd;border-radius:20px}.ai{background:#f4f8fd;border:1px solid #dae7f3;padding:15px;border-radius:12px}
+#answer{white-space:pre-wrap;overflow-wrap:anywhere;min-height:75px}#message{min-height:24px;color:#2c6b55;font-size:12px;margin:12px 0}#message.error{color:#b04444}
+@media(max-width:850px){.layout{grid-template-columns:1fr}.shell{padding:0 14px 45px}.hero{padding:23px}.panel{padding:17px}.search{flex-wrap:wrap}.search button{width:100%}}
+
+.field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.field-grid label{min-width:0}
+select,input[type=date]{width:100%;background:white;border:1px solid #cbd7e4;padding:11px;border-radius:9px;font:inherit;color:var(--ink);margin-top:7px}
+.record-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+.record-info{min-width:0;display:grid;gap:3px}.record-info strong{overflow-wrap:anywhere}
+.record-info small{color:var(--muted);font-size:11px}
+.delete-record{background:#fff3f0;color:#9e3c32;border:1px solid #efc3bc;white-space:nowrap}
+#sourceList{font-size:12px;color:#52687a;display:grid;gap:7px}
+#sourceList .source{background:#fff;border:1px solid #d9e7f0;border-radius:8px;padding:7px 9px}
+.privacy-warning{background:#fff9ec;border:1px solid #efe1bd;border-radius:10px;padding:10px 14px;color:#6b5b3c;font-size:11px;margin-top:12px}
+@media(max-width:620px){.field-grid{grid-template-columns:1fr}}
+
+
+.local-ai-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0 12px;font-size:11px;color:var(--muted)}
+.local-ai-status button{padding:7px 11px;background:#f5f8fb;border:1px solid var(--line);font-weight:600}
+
+
+.local-ai-status{align-items:flex-start}
+.ai select{display:block;width:100%;padding:11px 12px;border:1px solid #cbd7e4;border-radius:9px;background:white;font:inherit;color:var(--ink)}
+.ai a{color:var(--blue);text-decoration:underline}
+
+.search-filters{margin:12px 0 14px}
+.search-filters summary{cursor:pointer;display:inline-flex;align-items:center;padding:6px 1px;color:#436f9c;font-weight:650;font-size:12px}
+.search-filters .field-grid{margin-top:10px;padding:13px;background:#f7f9fc;border:1px solid var(--line);border-radius:11px}
+</style></head><body><div class="shell"><header class="top"><div><div class="logo">folio <span style="color:#7c98b4;font:400 12px sans-serif">/ personal knowledge</span></div><div class="subtitle">自分の資料を、自分のPCで検索する。</div></div><span class="pill">● ローカル動作</span></header>
+<section class="hero"><span class="eyebrow">YOUR PRIVATE KNOWLEDGE BASE</span><h1>必要な情報が、すぐ見つかる。</h1><p>AIがなくても言葉で検索。Ollamaが使えるときだけ、資料を元にした回答も作れます。</p></section>
+<div id="message" role="status" aria-live="polite"></div><div class="layout"><div>
+<section class="panel"><h2>1. 資料を検索する</h2><div class="search"><input id="query" type="search" autocomplete="off" placeholder="覚えている単語を入力　例：旅費、契約、研修"><button id="search" class="primary">検索 →</button></div>
+<details id="searchFilters" class="search-filters"><summary>種類・日付で絞り込む（任意）</summary><div class="field-grid">
+<label>記録の種類<select id="searchCategory"><option value="">すべての種類</option><option>メモ・記録</option><option>資料・書類</option><option>数値・表</option><option>その他</option></select></label>
+<label>開始日（任意）<input id="dateFrom" type="date"></label>
+<label>終了日（任意）<input id="dateTo" type="date"></label></div></details>
+<p class="note">資料名や保存した日付を覚える必要はありません。 本文に含まれる単語から探します。入力すると自動検索し、必要なときだけ種類や期間で絞れます。</p><div id="results" aria-live="polite"><p class="hint">ここに検索結果が表示されます。</p></div></section>
+<section class="panel"><div class="row" style="justify-content:space-between"><h2>2. AIで資料に質問（任意）</h2><span class="badge">Ollama optional</span></div><div class="ai"><label for="model">使用するモデル（任意）<select id="model" aria-describedby="aiStatus"><option value="">接続確認後に選択できます</option></select></label><p class="note">検索で見つかった資料の抜粋3件だけをローカルOllamaに渡します。AIを使わない場合は検索だけで完結します。</p><div class="local-ai-status"><button id="checkAi" type="button" aria-describedby="aiStatus">Ollamaを探す・モデルを表示</button><span id="aiStatus" aria-live="polite">Ollama：未確認（検索は利用できます）</span></div><p class="note">未導入の場合は <a href="https://ollama.com/download" target="_blank" rel="noopener noreferrer">Ollama公式サイト</a> からインストールし、モデルを取得したあと接続確認してください。</p><button id="ask">検索結果から回答を生成する</button><pre id="answer"></pre><div id="sourceList" aria-live="polite"></div></div></section>
+</div><aside><section class="panel"><h2>3. 記録・資料を追加する</h2><p class="note">利用者自身が内容・分類・日付を選んで保存します。用途を限定せず、端末外への自動同期もしません。</p><label>ファイルから追加<input id="file" type="file" accept=".txt,.md,.csv,.json,text/plain"></label><div class="field-grid">
+<label>記録の種類<select id="category"><option>メモ・記録</option><option>資料・書類</option><option>数値・表</option><option selected>その他</option></select></label>
+<label>記録した日<input type="date" id="eventDate"></label></div>
+<label>記録名<input id="title" maxlength="160" placeholder="例：会議メモ・作業記録・参考資料"></label><label>資料の文章<textarea id="content" maxlength="1500000" placeholder="ここに資料の内容を貼り付け"></textarea></label><button class="primary" id="add">ローカルに保存する</button>
+<div class="privacy-warning">記録はローカルSQLiteに保存しますが、暗号化は未対応です。個人情報や機密資料の保存には、端末の保護と権限管理が必要です。</div></section>
+<section class="panel"><h2>4. 保存済み記録を管理</h2><p class="note">記録は個別に削除できます。削除後の検索やAIの参照対象からも外れます。</p><label>一覧の種類<select id="listCategory"><option value="">すべての記録</option><option>メモ・記録</option><option>資料・書類</option><option>数値・表</option><option>その他</option></select></label>
+<button id="refreshRecords" type="button">記録一覧を更新</button><div id="recordList" aria-live="polite"></div></section></aside></div></div>
+<script>
+const $=id=>document.getElementById(id);let hits=[];let lastRequest=0,searchDebounce=null;
+function msg(s,error=false){$('message').textContent=s;$('message').className=error?'error':'';}
+async function api(path,payload){
+  const response=await fetch(path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
+  const data=await response.json().catch(()=>({error:'サーバーが応答しません'}));
+  if(!response.ok)throw Error(data.error||'通信エラー');
+  return data;
+}
+function localDate(){
+  const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
+}
+$('eventDate').value=localDate();
+$('file').addEventListener('change',async()=>{
+  const f=$('file').files[0];if(!f)return;
+  if(f.size>1500000){msg('1.5MB以下の資料を選んでください。',true);return;}
+  if(!['txt','md','csv','json'].includes((f.name.split('.').pop()||'').toLowerCase())){
+    msg('対応ファイル形式ではありません。',true);return;
+  }
+  $('title').value=f.name;$('content').value=await f.text();
+  msg('ファイルを読み込みました。内容を確認して保存してください。');
+});
+$('add').addEventListener('click',async()=>{
+  try{
+    const out=await api('/api/add',{
+      title:$('title').value,content:$('content').value,
+      category:$('category').value,event_date:$('eventDate').value
+    });
+    msg('資料を保存しました。ID: '+out.id);
+    $('content').value='';$('file').value='';
+    await refreshRecords();
+  }catch(e){msg(e.message,true);}
+});
+async function find(){
+  const request=++lastRequest;
+  if(!$('query').value.trim()){
+    hits=[];$('sourceList').replaceChildren();$('answer').textContent='';
+    $('results').textContent='検索したい単語を入力してください。';
+    return;
+  }
+  try{
+    const out=await api('/api/search',{
+      query:$('query').value, category:$('searchCategory').value,
+      date_from:$('dateFrom').value,date_to:$('dateTo').value
+    });
+    if(request!==lastRequest)return;
+    hits=out.results||[];
+    const el=$('results');el.replaceChildren();$('answer').textContent='';
+    $('sourceList').replaceChildren();
+    if(!hits.length){
+      const p=document.createElement('p');p.className='hint';p.textContent='一致する記録はありません。種類・日付・言葉を変えて検索してください。';el.append(p);
+    }
+    for(const h of hits){
+      const card=document.createElement('article');card.className='result';
+      const title=document.createElement('b');title.textContent=h.title;
+      const meta=document.createElement('div');meta.className='meta';
+      meta.textContent=h.category+'　'+(h.event_date||'日付不明')+
+        '　該当語：'+(h.matched_terms||[]).join('・')+
+        (h.full_match===false?'（一部一致）':'')+'　ID '+h.id;
+      const snippet=document.createElement('p');snippet.textContent=h.snippet;
+      card.append(title,meta,snippet);el.append(card);
+    }
+    msg(hits.length+'件の記録が見つかりました。');
+  }catch(e){if(request===lastRequest)msg(e.message,true);}
+}
+$('search').addEventListener('click',()=>{clearTimeout(searchDebounce);find();});
+$('query').addEventListener('input',()=>{
+  clearTimeout(searchDebounce);
+  searchDebounce=setTimeout(find,320);
+});
+$('query').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){clearTimeout(searchDebounce);find();}
+});
+for(const id of ['searchCategory','dateFrom','dateTo']){
+  $(id).addEventListener('change',()=>{if($('query').value.trim())find();});
+}
+$('checkAi').addEventListener('click',async()=>{
+  const btn=$('checkAi'),label=$('aiStatus'),select=$('model');
+  btn.disabled=true;label.textContent='Ollama：このPCのモデルを確認中…';
+  try{
+    const state=await api('/api/status',{});
+    select.replaceChildren();
+    const models=state.available && Array.isArray(state.models)
+      ? state.models.filter(name=>typeof name==='string' && /^[a-zA-Z0-9_.:-]{1,100}$/.test(name)).slice(0,50)
+      : [];
+    if(!models.length){
+      const option=document.createElement('option');option.value='';
+      option.textContent=state.available?'モデルが見つかりません':'Ollamaに未接続';
+      select.append(option);
+      label.textContent=state.available
+        ? 'Ollamaは動いています。モデルを取得後に再確認してください。'
+        : 'Ollama：未接続。AIなしの検索は利用できます。';
+    }else{
+      let previous=select.value;
+      try{previous=localStorage.getItem('folio.model.v1')||previous;}catch(e){}
+      for(const name of models){
+        const option=document.createElement('option');option.value=name;option.textContent=name;select.append(option);
+      }
+      select.value=models.includes(previous)?previous:models[0];
+      try{localStorage.setItem('folio.model.v1',select.value);}catch(e){}
+      label.textContent='Ollama：接続できました。モデルを選択できます（'+models.length+'件）。';
+    }
+  }catch(e){
+    label.textContent='Ollama：確認できません。通常の検索は利用できます。';
+  }finally{btn.disabled=false;}
+});
+$('model').addEventListener('change',()=>{
+  try{localStorage.setItem('folio.model.v1',$('model').value);}catch(e){}
+});
+$('ask').addEventListener('click',async()=>{
+  if(!hits.length){msg('先に資料を検索してください。',true);return;}
+  if(!$('model').value){msg('AI補助を使うには「Ollamaを探す」を押してモデルを選択してください。',true);$('checkAi').focus();return;}
+  $('answer').textContent='ローカルAIが回答を生成中…';$('sourceList').replaceChildren();
+  try{
+    const r=await api('/api/ask',{
+      query:$('query').value,ids:hits.slice(0,3).map(x=>x.id),model:$('model').value
+    });
+    $('answer').textContent=r.answer||'回答なし';
+    const title=document.createElement('strong');title.textContent='参照した記録';
+    $('sourceList').append(title);
+    for(const source of r.sources||[]){
+      const div=document.createElement('div');div.className='source';
+      div.textContent='記録ID '+source.id+' · '+source.category+' · '+(source.event_date||'日付不明')+' · '+source.title;
+      $('sourceList').append(div);
+    }
+    msg('資料を参照して回答案を生成しました。事実関係は元の記録で確認してください。');
+  }catch(e){$('answer').textContent='AIは利用できません。検索機能は引き続き使えます。';msg(e.message,true);}
+});
+async function refreshRecords(){
+  try{
+    const r=await api('/api/list',{category:$('listCategory').value});
+    const el=$('recordList');el.replaceChildren();
+    if(!r.records.length){
+      const p=document.createElement('p');p.className='hint';p.textContent='保存済み記録がありません。';el.append(p);return;
+    }
+    for(const record of r.records){
+      const row=document.createElement('div');row.className='record-row';
+      const info=document.createElement('div');info.className='record-info';
+      const name=document.createElement('strong');name.textContent=record.title;
+      const detail=document.createElement('small');
+      detail.textContent=record.category+' · '+(record.event_date||'日付未指定')+' · ID '+record.id;
+      info.append(name,detail);
+      const remove=document.createElement('button');remove.className='delete-record';
+      remove.textContent='削除';remove.type='button';
+      remove.setAttribute('aria-label',record.title+' を削除');
+      remove.addEventListener('click',async()=>{
+        if(!confirm('「'+record.title+'」を削除しますか？ 元に戻せません。'))return;
+        try{
+          await api('/api/delete',{id:record.id});
+          hits=hits.filter(h=>h.id!==record.id);
+          $('answer').textContent='';$('sourceList').replaceChildren();
+          await refreshRecords();
+          msg('記録を削除しました。AIの参照対象からも除外しました。');
+        }catch(e){msg(e.message,true);}
+      });
+      row.append(info,remove);el.append(row);
+    }
+  }catch(e){msg(e.message,true);}
+}
+$('listCategory').addEventListener('change',refreshRecords);
+$('refreshRecords').addEventListener('click',refreshRecords);
+refreshRecords();
+</script></body></html>
