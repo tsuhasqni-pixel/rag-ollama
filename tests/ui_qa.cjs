@@ -48,6 +48,9 @@ async function ready(){
   await page.locator('#add').click();
   await page.getByText('資料を保存しました', {exact:false}).waitFor();
   await page.locator('#query').fill(unique);
+  // One remembered word is enough; typing triggers a debounced search.
+  await page.locator('.result').filter({hasText:unique}).first().waitFor();
+  assert((await page.locator('.result .meta').first().textContent()).includes('該当語'));
   await page.locator('#searchCategory').selectOption('メモ・記録');
   await page.locator('#dateFrom').fill('2026-10-01');
   await page.locator('#dateTo').fill('2026-10-31');
