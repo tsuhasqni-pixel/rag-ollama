@@ -38,12 +38,12 @@ select,input[type=date]{width:100%;background:white;border:1px solid #cbd7e4;pad
 </style></head><body><div class="shell"><header class="top"><div><div class="logo">folio <span style="color:#7c98b4;font:400 12px sans-serif">/ personal knowledge</span></div><div class="subtitle">自分の資料を、自分のPCで検索する。</div></div><span class="pill">● ローカル動作</span></header>
 <section class="hero"><span class="eyebrow">YOUR PRIVATE KNOWLEDGE BASE</span><h1>必要な情報が、すぐ見つかる。</h1><p>AIがなくても言葉で検索。Ollamaが使えるときだけ、資料を元にした回答も作れます。</p></section>
 <div id="message" role="status" aria-live="polite"></div><div class="layout"><div>
-<section class="panel"><h2>1. 資料を検索する</h2><div class="search"><input id="query" type="search" placeholder="例：予算、議事録、2026年の予定"><button id="search" class="primary">記録を探す →</button></div>
+<section class="panel"><h2>1. 資料を検索する</h2><div class="search"><input id="query" type="search" autocomplete="off" placeholder="覚えている単語を入力　例：旅費、契約、研修"><button id="search" class="primary">検索 →</button></div>
 <div class="field-grid">
 <label>記録の種類<select id="searchCategory"><option value="">すべての種類</option><option>メモ・記録</option><option>資料・書類</option><option>数値・表</option><option>その他</option></select></label>
 <label>開始日（任意）<input id="dateFrom" type="date"></label>
 <label>終了日（任意）<input id="dateTo" type="date"></label></div>
-<p class="note">選んだ種類と日付で絞り込みます。現段階はキーワードの一致検索なので、日付・記録にないことは答えられません。</p><div id="results" aria-live="polite"><p class="hint">ここに検索結果が表示されます。</p></div></section>
+<p class="note">資料名や保存した日付を覚える必要はありません。 本文に含まれる単語から探します。入力すると自動検索し、必要なときだけ種類や期間で絞れます。</p><div id="results" aria-live="polite"><p class="hint">ここに検索結果が表示されます。</p></div></section>
 <section class="panel"><div class="row" style="justify-content:space-between"><h2>2. AIで資料に質問（任意）</h2><span class="badge">Ollama optional</span></div><div class="ai"><label for="model">使用するモデル（任意）<select id="model" aria-describedby="aiStatus"><option value="">接続確認後に選択できます</option></select></label><p class="note">検索で見つかった資料の抜粋3件だけをローカルOllamaに渡します。AIを使わない場合は検索だけで完結します。</p><div class="local-ai-status"><button id="checkAi" type="button" aria-describedby="aiStatus">Ollamaを探す・モデルを表示</button><span id="aiStatus" aria-live="polite">Ollama：未確認（検索は利用できます）</span></div><p class="note">未導入の場合は <a href="https://ollama.com/download" target="_blank" rel="noopener noreferrer">Ollama公式サイト</a> からインストールし、モデルを取得したあと接続確認してください。</p><button id="ask">検索結果から回答を生成する</button><pre id="answer"></pre><div id="sourceList" aria-live="polite"></div></div></section>
 </div><aside><section class="panel"><h2>3. 記録・資料を追加する</h2><p class="note">利用者自身が内容・分類・日付を選んで保存します。用途を限定せず、端末外への自動同期もしません。</p><label>ファイルから追加<input id="file" type="file" accept=".txt,.md,.csv,.json,text/plain"></label><div class="field-grid">
 <label>記録の種類<select id="category"><option>メモ・記録</option><option>資料・書類</option><option>数値・表</option><option selected>その他</option></select></label>
@@ -53,7 +53,7 @@ select,input[type=date]{width:100%;background:white;border:1px solid #cbd7e4;pad
 <section class="panel"><h2>4. 保存済み記録を管理</h2><p class="note">記録は個別に削除できます。削除後の検索やAIの参照対象からも外れます。</p><label>一覧の種類<select id="listCategory"><option value="">すべての記録</option><option>メモ・記録</option><option>資料・書類</option><option>数値・表</option><option>その他</option></select></label>
 <button id="refreshRecords" type="button">記録一覧を更新</button><div id="recordList" aria-live="polite"></div></section></aside></div></div>
 <script>
-const $=id=>document.getElementById(id);let hits=[];
+const $=id=>document.getElementById(id);let hits=[];let lastRequest=0,searchDebounce=null;
 function msg(s,error=false){$('message').textContent=s;$('message').className=error?'error':'';}
 async function api(path,payload){
   const response=await fetch(path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
@@ -86,11 +86,18 @@ $('add').addEventListener('click',async()=>{
   }catch(e){msg(e.message,true);}
 });
 async function find(){
+  const request=++lastRequest;
+  if(!$('query').value.trim()){
+    hits=[];$('sourceList').replaceChildren();$('answer').textContent='';
+    $('results').textContent='検索したい単語を入力してください。';
+    return;
+  }
   try{
     const out=await api('/api/search',{
       query:$('query').value, category:$('searchCategory').value,
       date_from:$('dateFrom').value,date_to:$('dateTo').value
     });
+    if(request!==lastRequest)return;
     hits=out.results||[];
     const el=$('results');el.replaceChildren();$('answer').textContent='';
     $('sourceList').replaceChildren();
@@ -101,15 +108,26 @@ async function find(){
       const card=document.createElement('article');card.className='result';
       const title=document.createElement('b');title.textContent=h.title;
       const meta=document.createElement('div');meta.className='meta';
-      meta.textContent=h.category+'　'+(h.event_date||'日付不明')+'　ID '+h.id;
+      meta.textContent=h.category+'　'+(h.event_date||'日付不明')+
+        '　該当語：'+(h.matched_terms||[]).join('・')+
+        (h.full_match===false?'（一部一致）':'')+'　ID '+h.id;
       const snippet=document.createElement('p');snippet.textContent=h.snippet;
       card.append(title,meta,snippet);el.append(card);
     }
     msg(hits.length+'件の記録が見つかりました。');
-  }catch(e){msg(e.message,true);}
+  }catch(e){if(request===lastRequest)msg(e.message,true);}
 }
-$('search').addEventListener('click',find);
-$('query').addEventListener('keydown',e=>{if(e.key==='Enter')find();});
+$('search').addEventListener('click',()=>{clearTimeout(searchDebounce);find();});
+$('query').addEventListener('input',()=>{
+  clearTimeout(searchDebounce);
+  searchDebounce=setTimeout(find,320);
+});
+$('query').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){clearTimeout(searchDebounce);find();}
+});
+for(const id of ['searchCategory','dateFrom','dateTo']){
+  $(id).addEventListener('change',()=>{if($('query').value.trim())find();});
+}
 $('checkAi').addEventListener('click',async()=>{
   const btn=$('checkAi'),label=$('aiStatus'),select=$('model');
   btn.disabled=true;label.textContent='Ollama：このPCのモデルを確認中…';
