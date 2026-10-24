@@ -13,6 +13,13 @@ async function ready(){for(let i=0;i<60;i++){try{if((await fetch('http://127.0.0
   const page=await browser.newPage({viewport:{width:w,height:h}});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:8775');
+  // AI status is explicit: no Ollama request just to open the page.
+  assert((await page.locator('#aiStatus').textContent()).includes('未確認'));
+  await page.route('**/api/status',route=>route.fulfill({status:200,contentType:'application/json',
+     body:JSON.stringify({available:false,models:[]})}));
+  await page.locator('#checkAi').click();
+  await page.getByText('Ollama：未接続', {exact:false}).waitFor();
+  await page.unroute('**/api/status');
   const unique='企画案'+w;
   await page.locator('#title').fill('作業メモ'+w);
   await page.locator('#category').selectOption('メモ・記録');
