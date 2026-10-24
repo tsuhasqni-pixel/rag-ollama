@@ -58,6 +58,30 @@ async function ready(){for(let i=0;i<60;i++){try{if((await fetch('http://127.0.0
   page.once('dialog',dialog=>dialog.accept());
   await page.locator('#recordList .record-row').filter({hasText:'秋の遠足'+w}).locator('.delete-record').click();
   await page.getByText('記録を削除しました', {exact:false}).waitFor();
+  // Import an EXPLICIT test Daymark backup as per-day records; no Ollama call.
+  const diaryWord='図書館'+w;
+  const backup={version:1,habits:[{id:'h1',name:'読書',active:true}],entries:{
+    '2026-10-22':{wake:'07:00',sleep:'22:30',mood:4,
+       text:diaryWord+'で資料を読んだ。',wellbeingNote:'落ち着いた',
+       checks:{h1:true},habitNames:{h1:'読書'}}
+  }};
+  await page.locator('#importDaymark').setInputFiles({
+    name:'synthetic-daymark-backup.json',mimeType:'application/json',
+    buffer:Buffer.from(JSON.stringify(backup),'utf8')
+  });
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#importDaymarkBtn').click();
+  await page.getByText('Daymarkの記録を取り込みました', {exact:false}).waitFor();
+  await page.locator('#searchCategory').selectOption('日記');
+  await page.locator('#dateFrom').fill('2026-10-01');
+  await page.locator('#dateTo').fill('2026-10-31');
+  await page.locator('#query').fill(diaryWord);
+  await page.locator('#search').click();
+  await page.locator('.result').first().waitFor();
+  assert.equal(await page.locator('.result').count(),1);
+  assert((await page.locator('.result .meta').first().textContent()).includes('2026-10-22'));
+  await page.locator('#searchCategory').selectOption('子どもの記録');
+  await page.locator('#query').fill(unique);
   await page.locator('#search').click();
   await page.getByText('一致する記録はありません', {exact:false}).waitFor();
   assert.equal(await page.locator('.result').count(),0);
