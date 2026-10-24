@@ -1,9 +1,10 @@
 const {chromium}=require('playwright');
 const {spawn}=require('node:child_process');
-const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
 const root=path.join(__dirname,'..'),out=path.join(root,'qa-screenshots');
 fs.mkdirSync(out,{recursive:true});
-const worker=spawn('python',['server.py'],{cwd:root,stdio:'pipe',env:{...process.env,RAG_OLLAMA_DATA_DIR:path.join(out,'private-db')}});
+const tmpDb=fs.mkdtempSync(path.join(os.tmpdir(),'rag-ollama-test-'));
+const worker=spawn('python',['server.py'],{cwd:root,stdio:'pipe',env:{...process.env,RAG_OLLAMA_DATA_DIR:tmpDb}});
 async function ready(){for(let i=0;i<60;i++){try{if((await fetch('http://127.0.0.1:8775')).ok)return}catch(e){}await new Promise(r=>setTimeout(r,150));}throw Error('local RAG server did not start');}
 (async()=>{
  await ready();const browser=await chromium.launch({headless:true,channel:'msedge'});
