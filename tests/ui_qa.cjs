@@ -20,6 +20,15 @@ async function ready(){for(let i=0;i<60;i++){try{if((await fetch('http://127.0.0
   await page.locator('#checkAi').click();
   await page.getByText('Ollama：未接続', {exact:false}).waitFor();
   await page.unroute('**/api/status');
+  // Optional local Ollama model selector can be used without entering model IDs.
+  await page.route('**/api/status',route=>route.fulfill({status:200,contentType:'application/json',
+     body:JSON.stringify({available:true,models:['qwen3:4b','gemma3:1b']})}));
+  await page.locator('#checkAi').click();
+  await page.getByText('Ollama：接続できました', {exact:false}).waitFor();
+  await page.locator('#model').selectOption('gemma3:1b');
+  assert.equal(await page.locator('#model').inputValue(),'gemma3:1b');
+  await page.screenshot({path:path.join(out,'ai-model-setup-'+w+'x'+h+'.png'),fullPage:true});
+  await page.unroute('**/api/status');
   const unique='企画案'+w;
   await page.locator('#title').fill('作業メモ'+w);
   await page.locator('#category').selectOption('メモ・記録');
@@ -57,6 +66,7 @@ async function ready(){for(let i=0;i<60;i++){try{if((await fetch('http://127.0.0
   await page.locator('#ask').click();
   await page.locator('#sourceList .source').first().waitFor();
   assert.equal(asked.ids.length,1);
+  assert.equal(asked.model,'gemma3:1b');
   assert((await page.locator('#sourceList').textContent()).includes('2026-10-20'));
   await page.unroute('**/api/ask');
   // Deleting the record removes it from saved documents and from retrieval.
