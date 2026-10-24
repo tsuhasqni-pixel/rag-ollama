@@ -67,8 +67,10 @@ function setup(config){
         stopPolling();progress.hidden=true;readyModel='';
         say(state.status||'取得に失敗しました。空き容量とネット接続を確認してください。');
       }
+      return state.state;
     }catch(e){
       stopPolling();say('ダウンロード状況を確認できません。Ollamaが起動しているか確認してください。');
+      return 'error';
     }
   }
   async function choose(){
@@ -95,8 +97,8 @@ function setup(config){
       progress.hidden=false;progress.value=0;
       progressText.textContent='ダウンロードを開始しました。サイズによって時間がかかります。';
       say('取得中も日記・資料検索の基本機能は利用できます。');
-      await updateProgress();
-      if(timer===null)timer=setInterval(updateProgress,1200);
+      const stateNow=await updateProgress();
+      if(stateNow==='running' && timer===null)timer=setInterval(updateProgress,1200);
     }catch(e){select.value='';say('取得を開始できませんでした: '+e.message);}
   }
   button.addEventListener('click',refresh);
