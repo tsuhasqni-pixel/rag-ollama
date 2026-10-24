@@ -37,23 +37,23 @@ class OfflineRAGTests(unittest.TestCase):
                 with self.assertRaises(ValueError):server.ollama_summary("質問",[],"qwen3:4b")
 
 
-    def test_family_records_dates_and_deletion_without_ollama(self):
+    def test_generic_records_dates_and_deletion_without_ollama(self):
         with tempfile.TemporaryDirectory() as d:
             with patch.object(server,"BASE",Path(d)),patch.object(server,"DB",Path(d)/"db.sqlite"):
-                child=server.add_document("遠足","公園で虫を見つけた",category="子どもの記録",event_date="2026-10-20")
-                budget=server.add_document("家計","食費が少し増えた",category="家計簿",event_date="2026-10-22")
-                self.assertEqual(server.search("公園",category="家計簿"),[])
-                self.assertEqual(server.search("公園",category="子どもの記録",
-                                               date_from="2026-10-01",date_to="2026-10-31")[0]["id"],child)
+                record=server.add_document("遠足","公園で虫を見つけた",category="メモ・記録",event_date="2026-10-20")
+                budget=server.add_document("家計","食費が少し増えた",category="数値・表",event_date="2026-10-22")
+                self.assertEqual(server.search("公園",category="数値・表"),[])
+                self.assertEqual(server.search("公園",category="メモ・記録",
+                                               date_from="2026-10-01",date_to="2026-10-31")[0]["id"],record)
                 self.assertEqual(server.search("公園",date_from="2026-10-21"),[])
-                listing=server.list_documents(category="家計簿")
+                listing=server.list_documents(category="数値・表")
                 self.assertEqual(len(listing),1)
                 self.assertEqual(listing[0]["id"],budget)
                 self.assertNotIn("content",listing[0])
-                self.assertTrue(server.delete_document(child))
-                self.assertFalse(server.delete_document(child))
+                self.assertTrue(server.delete_document(record))
+                self.assertFalse(server.delete_document(record))
                 self.assertEqual(server.search("公園"),[])
-                self.assertEqual(server.read_excerpt([child]),"")
+                self.assertEqual(server.read_excerpt([record]),"")
 
     def test_unknown_category_and_bad_date_rejected(self):
         with tempfile.TemporaryDirectory() as d:
@@ -80,51 +80,39 @@ class OfflineRAGTests(unittest.TestCase):
     def test_evidence_excerpt_contains_record_id_category_and_date(self):
         with tempfile.TemporaryDirectory() as d:
             with patch.object(server,"BASE",Path(d)),patch.object(server,"DB",Path(d)/"db.sqlite"):
-                uid=server.add_document("学校","運動会の様子",category="子どもの記録",event_date="2026-10-10")
+                uid=server.add_document("学校","運動会の様子",category="メモ・記録",event_date="2026-10-10")
                 excerpt=server.read_excerpt([uid])
                 self.assertIn("記録日 2026-10-10",excerpt)
                 self.assertIn("資料ID",excerpt)
-                self.assertIn("子どもの記録",excerpt)
+                self.assertIn("メモ・記録",excerpt)
 
 
-    def test_daymark_import_by_date_and_reimport_updates_same_copy(self):
+    def test_existing_categories_migrate_without_losing_content(self):
+        import sqlite3
         with tempfile.TemporaryDirectory() as d:
-            with patch.object(server,"BASE",Path(d)),patch.object(server,"DB",Path(d)/"db.sqlite"):
-                original={
-                    "version":1,
-                    "habits":[{"id":"reading","name":"読書","active":True},
-                              {"id":"walk","name":"散歩","active":True}],
-                    "entries":{"2026-10-22":{
-                        "wake":"07:30","sleep":"23:00","mood":4,
-                        "text":"昨日は図書館へ行った。","wellbeingNote":"元気",
-                        "checks":{"reading":True,"walk":False},
-                        "habitNames":{"reading":"読書","walk":"散歩"},
-                    }}
-                }
-                r=server.import_daymark_backup(original)
-                self.assertEqual(r["imported"],1)
-                results=server.search("図書館",category="日記",date_from="2026-10-22")
-                self.assertEqual(len(results),1)
-                self.assertEqual(results[0]["event_date"],"2026-10-22")
-                src=server.read_excerpt([results[0]["id"]])
-                self.assertIn("読書",src)
-                self.assertNotIn("散歩",src)
-                original["entries"]["2026-10-22"]["text"]="今日の振り返りを追記した。"
-                again=server.import_daymark_backup(original)
-                self.assertEqual(again["imported"],0)
-                self.assertEqual(again["updated"],1)
-                self.assertEqual(len(server.list_documents(category="日記")),1)
-                self.assertTrue(server.delete_document(results[0]["id"]))
-                self.assertEqual(server.search("振り返り"),[])
-
-    def test_invalid_backup_does_not_write_partial_data(self):
-        with tempfile.TemporaryDirectory() as d:
-            with patch.object(server,"BASE",Path(d)),patch.object(server,"DB",Path(d)/"db.sqlite"):
-                invalid={"version":1,"habits":[],
-                         "entries":{"2026-10-10":{"text":"valid"},
-                                    "2026-02-30":{"text":"invalid"}}}
-                with self.assertRaises(ValueError):server.import_daymark_backup(invalid)
+            db=Path(d)/"legacy.sqlite3"
+            con=sqlite3.connect(db)
+            con.execute("""CREATE TABLE docs (
+                id INTEGER PRIMARY KEY, title TEXT, content TEXT, created_at TEXT,
+                category TEXT NOT NULL, event_date TEXT NOT NULL, source_key TEXT NOT NULL
+            )""")
+            con.execute("""INSERT INTO docs VALUES (
+                1,'旧分類のメモ','重要な記録を保管した','2026-10-01',
+                '子どもの記録','2026-10-01','daymark|2026-10-01')""")
+            con.commit()
+            con.close()
+            with patch.object(server,"BASE",Path(d)),patch.object(server,"DB",db):
+                matching=server.search("重要",category="メモ・記録")
+                self.assertEqual(len(matching),1)
+                self.assertEqual(matching[0]["title"],"旧分類のメモ")
+                self.assertEqual(matching[0]["event_date"],"2026-10-01")
+                self.assertTrue(server.delete_document(1))
                 self.assertEqual(server.list_documents(),[])
+
+    def test_no_app_specific_import_function_or_endpoint(self):
+        self.assertFalse(hasattr(server, "import_daymark_backup"))
+        # The product's API only exposes general-purpose record workflows.
+        self.assertNotIn("/api/import/daymark",server.Handler.do_POST.__code__.co_consts)
 
 
 if __name__=="__main__":unittest.main()
