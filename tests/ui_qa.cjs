@@ -13,26 +13,26 @@ async function ready(){for(let i=0;i<60;i++){try{if((await fetch('http://127.0.0
   const page=await browser.newPage({viewport:{width:w,height:h}});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:8775');
-  const unique='遠足'+w;
-  await page.locator('#title').fill('秋の遠足'+w);
-  await page.locator('#category').selectOption('子どもの記録');
+  const unique='企画案'+w;
+  await page.locator('#title').fill('作業メモ'+w);
+  await page.locator('#category').selectOption('メモ・記録');
   await page.locator('#eventDate').fill('2026-10-20');
-  await page.locator('#content').fill('公園で'+unique+'を楽しんだという記録。');
+  await page.locator('#content').fill('会議で'+unique+'を確認したという記録。');
   await page.locator('#add').click();
   await page.getByText('資料を保存しました', {exact:false}).waitFor();
   await page.locator('#query').fill(unique);
-  await page.locator('#searchCategory').selectOption('子どもの記録');
+  await page.locator('#searchCategory').selectOption('メモ・記録');
   await page.locator('#dateFrom').fill('2026-10-01');
   await page.locator('#dateTo').fill('2026-10-31');
   await page.locator('#search').click();
   await page.locator('.result').first().waitFor();
   assert.equal(await page.locator('.result').count(),1);
   assert((await page.locator('.result .meta').first().textContent()).includes('2026-10-20'));
-  await page.locator('#searchCategory').selectOption('家計簿');
+  await page.locator('#searchCategory').selectOption('数値・表');
   await page.locator('#search').click();
   await page.getByText('一致する記録はありません', {exact:false}).waitFor();
   assert.equal(await page.locator('.result').count(),0);
-  await page.locator('#searchCategory').selectOption('子どもの記録');
+  await page.locator('#searchCategory').selectOption('メモ・記録');
   await page.locator('#search').click();
   await page.locator('.result').first().waitFor();
   const overscroll=await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+2);
@@ -43,8 +43,8 @@ async function ready(){for(let i=0;i<60;i++){try{if((await fetch('http://127.0.0
   await page.route('**/api/ask',route=>{
     asked=route.request().postDataJSON();
     route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
-      answer:'この記録では公園で遠足を楽しんだとあります。',
-      sources:[{id:asked.ids[0],category:'子どもの記録',event_date:'2026-10-20',title:'秋の遠足'}]
+      answer:'この記録では会議で企画案を楽しんだとあります。',
+      sources:[{id:asked.ids[0],category:'メモ・記録',event_date:'2026-10-20',title:'作業メモ'}]
     })});
   });
   await page.locator('#ask').click();
@@ -53,38 +53,28 @@ async function ready(){for(let i=0;i<60;i++){try{if((await fetch('http://127.0.0
   assert((await page.locator('#sourceList').textContent()).includes('2026-10-20'));
   await page.unroute('**/api/ask');
   // Deleting the record removes it from saved documents and from retrieval.
-  await page.locator('#listCategory').selectOption('子どもの記録');
+  await page.locator('#listCategory').selectOption('メモ・記録');
   await page.locator('#refreshRecords').click();
   page.once('dialog',dialog=>dialog.accept());
-  await page.locator('#recordList .record-row').filter({hasText:'秋の遠足'+w}).locator('.delete-record').click();
+  await page.locator('#recordList .record-row').filter({hasText:'作業メモ'+w}).locator('.delete-record').click();
   await page.getByText('記録を削除しました', {exact:false}).waitFor();
-  // Import an EXPLICIT test Daymark backup as per-day records; no Ollama call.
-  const diaryWord='図書館'+w;
-  const backup={version:1,habits:[{id:'h1',name:'読書',active:true}],entries:{
-    '2026-10-22':{wake:'07:00',sleep:'22:30',mood:4,
-       text:diaryWord+'で資料を読んだ。',wellbeingNote:'落ち着いた',
-       checks:{h1:true},habitNames:{h1:'読書'}}
-  }};
-  await page.locator('#importDaymark').setInputFiles({
-    name:'synthetic-daymark-backup.json',mimeType:'application/json',
-    buffer:Buffer.from(JSON.stringify(backup),'utf8')
+  // File import remains generic; no other app's data schema is recognized.
+  assert.equal(await page.locator('#importDaymark').count(),0);
+  const genericWord='設計資料'+w;
+  await page.locator('#file').setInputFiles({
+    name:'my-notes.txt',mimeType:'text/plain',
+    buffer:Buffer.from(genericWord+'について考えた。','utf8')
   });
-  page.once('dialog',dialog=>dialog.accept());
-  await page.locator('#importDaymarkBtn').click();
-  await page.getByText('Daymarkの記録を取り込みました', {exact:false}).waitFor();
-  await page.locator('#searchCategory').selectOption('日記');
-  await page.locator('#dateFrom').fill('2026-10-01');
-  await page.locator('#dateTo').fill('2026-10-31');
-  await page.locator('#query').fill(diaryWord);
+  assert.equal(await page.locator('#title').inputValue(),'my-notes.txt');
+  await page.locator('#category').selectOption('資料・書類');
+  await page.locator('#eventDate').fill('2026-10-22');
+  await page.locator('#add').click();
+  await page.getByText('資料を保存しました',{exact:false}).waitFor();
+  await page.locator('#searchCategory').selectOption('資料・書類');
+  await page.locator('#query').fill(genericWord);
   await page.locator('#search').click();
   await page.locator('.result .meta').filter({hasText:'2026-10-22'}).first().waitFor();
   assert.equal(await page.locator('.result').count(),1);
-  assert((await page.locator('.result .meta').first().textContent()).includes('2026-10-22'));
-  await page.locator('#searchCategory').selectOption('子どもの記録');
-  await page.locator('#query').fill(unique);
-  await page.locator('#search').click();
-  await page.getByText('一致する記録はありません', {exact:false}).waitFor();
-  assert.equal(await page.locator('.result').count(),0);
   assert.deepEqual(errors,[],'browser JS error');
   await page.close();
  }
