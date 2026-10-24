@@ -17,7 +17,7 @@ class FakeResponse:
 class ModelInstallerTests(unittest.TestCase):
     def test_recommendation_follows_ram_and_storage(self):
         with patch.object(m,"total_ram_bytes",return_value=4_000_000_000), \
-             patch.object(m,"free_model_disk_bytes",return_value=1_000_000_000), \
+             patch.object(m,"free_model_disk_bytes",return_value=1_100_000_000), \
              patch.object(m,"request_json",return_value={"models":[]}):
             data=m.ModelManager().catalog()
         self.assertTrue(data["available"])
