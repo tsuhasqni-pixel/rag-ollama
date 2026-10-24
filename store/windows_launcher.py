@@ -35,7 +35,7 @@ def friendly_error(message: str) -> None:
 
 
 def run_self_test(base: str) -> None:
-    for path in (('/', '/index.html')):
+    for path in (('/', '/index.html', '/model_picker.js')):
         with urllib.request.urlopen(base + path, timeout=5) as response:
             body = response.read()
             if response.status != 200 or not body:
