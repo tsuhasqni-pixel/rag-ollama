@@ -1,0 +1,14 @@
+{
+  "product": "FolioAI",
+  "display_name": "Folio AI",
+  "description": "Offline personal document keyword search with optional local AI",
+  "identity_name": "OkinawaDesktopTools.FolioAI",
+  "publisher": "CN=46263F21-A700-41DB-8C9B-114C22FB82FC",
+  "publisher_display_name": "Okinawa Desktop Tools",
+  "version": "1.0.0.0",
+  "architecture": "x64",
+  "brand_color": "#29577C",
+  "logo_mark": "F",
+  "identity_source": "Partner Center identity screenshots supplied on 2026-10-24; Store association not verified by API",
+  "release_status": "QA_UNSIGNED_HOLD"
+}

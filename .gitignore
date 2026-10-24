@@ -6,3 +6,15 @@ node_modules/
 *.db
 rag-data/
 qa-screenshots/
+
+
+# generated desktop/MSIX packaging intermediates and local certificates
+/dist/
+/build/
+/msix-stage/
+/msix-verify/
+/msix-out/
+*.spec
+*.pfx
+*.cer
+*.p12

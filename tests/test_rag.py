@@ -155,5 +155,17 @@ class OfflineRAGTests(unittest.TestCase):
                 self.assertEqual(result[1]["id"],partial)
                 self.assertFalse(result[1]["full_match"])
 
+    def test_open_full_original_document_and_deleted_doc(self):
+        with tempfile.TemporaryDirectory() as d:
+            with patch.object(server,"BASE",Path(d)),patch.object(server,"DB",Path(d)/"db.sqlite"):
+                source="先頭にないキーワード。" + ("長い資料の本文。"*100)
+                record_id=server.add_document("どこかの記録",source,category="資料・書類")
+                found=server.get_document(record_id)
+                self.assertEqual(found["content"],source)
+                self.assertEqual(found["title"],"どこかの記録")
+                with self.assertRaises(ValueError): server.get_document(-1)
+                self.assertTrue(server.delete_document(record_id))
+                self.assertIsNone(server.get_document(record_id))
+
 
 if __name__=="__main__":unittest.main()

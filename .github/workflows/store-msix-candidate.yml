@@ -1,0 +1,41 @@
+name: FolioAI Store Candidate QA UNSIGNED
+on:
+  push:
+    branches:
+      - codex/store-msix-20261024
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  msix:
+    name: FolioAI Windows Store QA Candidate
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: 'x64'
+      - name: Unit regression and offline data tests
+        shell: pwsh
+        run: |
+          python -m unittest discover -s tests -p test_rag.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Offline search and data migration tests failed' }
+      - name: Install Windows-only packaging tools
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check "pyinstaller==6.22.3" "pywebview==6.2.1" "pillow==12.3.0"
+          if ($LASTEXITCODE -ne 0) { throw 'Bundler dependency install failed' }
+      - name: Build bundled Python desktop and QA_UNSIGNED MSIX
+        shell: pwsh
+        run: |
+          .\store\build_msix.ps1 -AppName FolioAI
+          if ($LASTEXITCODE -ne 0) { throw 'MSIX build script failed' }
+      - name: Upload unsigned QA package and SHA-256 report
+        uses: actions/upload-artifact@v4
+        with:
+          name: FolioAI_1.0.0.0_x64_QA_UNSIGNED
+          path: msix-out/*
+          if-no-files-found: error
+          retention-days: 30

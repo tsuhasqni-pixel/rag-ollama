@@ -51,6 +51,11 @@ async function ready(){
   // One remembered word is enough; typing triggers a debounced search.
   await page.locator('.result').filter({hasText:unique}).first().waitFor();
   assert((await page.locator('.result .meta').first().textContent()).includes('該当語'));
+  await page.locator('.result .result-actions button').first().click();
+  await page.locator('#docDialog').waitFor({state:'visible'});
+  assert((await page.locator('#docContent').textContent()).includes(unique));
+  await page.locator('#closeDoc').click();
+  assert.equal(await page.locator('#docDialog').isVisible(),false);
   assert.equal(await page.locator('#searchFilters').getAttribute('open'),null,'optional filters should be hidden initially');
   await page.locator('#searchFilters summary').click();
   await page.locator('#searchCategory').selectOption('メモ・記録');
