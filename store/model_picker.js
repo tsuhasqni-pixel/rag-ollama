@@ -55,11 +55,14 @@ function setup(config){
           '。通信環境やモデルのサイズにより数分～数十分以上かかる場合があります。';
       }else if(state.state==='ready'){
         stopPolling();progress.value=100;
-        readyModel=state.model;
-        say(state.model+' の取得が完了しました。AI補助を利用できます。');
+        const completed=state.model;
+        say(completed+' の取得が完了しました。AI補助を利用できます。');
         progressText.textContent='100% — モデルを利用できます。';
         await refresh();
-        select.value=readyModel; // only if still listed after fetching installed tags
+        if([...select.options].some(option=>option.value===completed)){
+          select.value=completed;readyModel=completed;
+          say(completed+' はインストール済みです。AI補助を利用できます。');
+        }
       }else if(state.state==='error'){
         stopPolling();progress.hidden=true;readyModel='';
         say(state.status||'取得に失敗しました。空き容量とネット接続を確認してください。');
