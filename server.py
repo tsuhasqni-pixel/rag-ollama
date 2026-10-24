@@ -146,6 +146,20 @@ def list_documents(category: str = "", limit: int = 100) -> list[dict]:
     finally:con.close()
 
 
+def get_document(identifier: int) -> dict | None:
+    if type(identifier) is not int or identifier <= 0:
+        raise ValueError("表示する記録IDが正しくありません。")
+    con = connect()
+    try:
+        record = con.execute(
+            "SELECT id,title,content,category,event_date FROM docs WHERE id=?",
+            (identifier,)
+        ).fetchone()
+        return dict(record) if record else None
+    finally:
+        con.close()
+
+
 def delete_document(identifier: int) -> bool:
     if type(identifier) is not int or identifier<=0:
         raise ValueError("削除する記録IDが正しくありません。")
@@ -236,7 +250,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length",str(len(raw)));self.end_headers();self.wfile.write(raw)
     def do_POST(self):
         path=urlsplit(self.path).path
-        if path not in ("/api/add","/api/search","/api/ask","/api/list","/api/delete","/api/status"):
+        if path not in ("/api/add","/api/search","/api/ask","/api/list","/api/delete","/api/status","/api/get"):
             return self.json_response(404,{"error":"見つかりません"})
         host=self.headers.get("Host","").split(":")[0]
         origin=self.headers.get("Origin")
@@ -259,6 +273,12 @@ class Handler(BaseHTTPRequestHandler):
                 result={"records":list_documents(category=obj.get("category") or "")}
             elif path=="/api/status":
                 result=ollama_status()
+            elif path=="/api/get":
+                identifier=obj.get("id")
+                if type(identifier) is not int: raise ValueError("記録IDが正しくありません。")
+                found=get_document(identifier)
+                if found is None: raise ValueError("この記録は見つかりません。")
+                result={"record":found}
             elif path=="/api/delete":
                 identifier=obj.get("id")
                 if type(identifier) is not int: raise ValueError("削除する記録IDが正しくありません。")
