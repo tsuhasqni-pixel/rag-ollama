@@ -109,7 +109,19 @@ class ModelManager:
             rows.append({"id":name,"download_bytes":size,"min_ram_gb":min_ram,
                          "description":summary,"installed":present,
                          "fits":fits,"reason":reason})
-        candidates=[m for m in rows if m["fits"]]
+        # Existing models from other families remain selectable, but only
+        # approved catalog models can trigger a new remote download.
+        known={m["id"] for m in rows}
+        for name in sorted(installed):
+            if not isinstance(name,str) or name in known or len(name)>100:
+                continue
+            if not all(c.isalnum() or c in "._:-" for c in name):
+                continue
+            rows.append({"id":name,"download_bytes":None,"min_ram_gb":None,
+                         "description":"既に導入済みのモデル",
+                         "installed":True,"fits":True,
+                         "reason":"インストール済み（実行時RAMは未評価）"})
+        candidates=[m for m in rows if m["fits"] and m["id"] in {x[0] for x in CATALOG}]
         recommendation=(candidates[-1]["id"] if candidates else None)
         return {"available":connected,
                 "ram_gb":round(ram/GB,1) if ram is not None else None,
