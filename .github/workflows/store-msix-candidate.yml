@@ -20,6 +20,8 @@ jobs:
       - name: Unit regression and offline data tests
         shell: pwsh
         run: |
+          python -m unittest discover -s tests -p test_ollama.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Ollama installer safety tests failed' }
           python -m unittest discover -s tests -p test_rag.py -v
           if ($LASTEXITCODE -ne 0) { throw 'Offline search and data migration tests failed' }
       - name: Install Windows-only packaging tools
