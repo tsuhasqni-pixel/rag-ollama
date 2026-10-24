@@ -161,6 +161,22 @@ def read_excerpt(ids: list[int]) -> str:
         for s in read_sources(ids)
     )
 
+
+def ollama_status() -> dict:
+    """Explicit, bounded local service check; no hardware permissions or polling."""
+    req=urllib.request.Request("http://127.0.0.1:11434/api/tags",method="GET")
+    try:
+        with urllib.request.urlopen(req,timeout=2) as response:
+            data=json.loads(response.read(100_000))
+        if not isinstance(data,dict) or not isinstance(data.get("models"),list):
+            return {"available":False,"models":[]}
+        models=[m.get("name","") for m in data["models"] if isinstance(m,dict)
+                and isinstance(m.get("name"),str)]
+        return {"available":True,"models":models[:12]}
+    except (urllib.error.URLError,TimeoutError,ValueError,OSError):
+        return {"available":False,"models":[]}
+
+
 def ollama_summary(query: str, refs: list[int], model: str) -> str:
     if not re.fullmatch(r"[\w.:-]{1,100}",model,flags=re.ASCII):
         raise ValueError("モデル名が正しくありません。")
@@ -195,7 +211,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length",str(len(raw)));self.end_headers();self.wfile.write(raw)
     def do_POST(self):
         path=urlsplit(self.path).path
-        if path not in ("/api/add","/api/search","/api/ask","/api/list","/api/delete"):
+        if path not in ("/api/add","/api/search","/api/ask","/api/list","/api/delete","/api/status"):
             return self.json_response(404,{"error":"見つかりません"})
         host=self.headers.get("Host","").split(":")[0]
         origin=self.headers.get("Origin")
@@ -216,6 +232,8 @@ class Handler(BaseHTTPRequestHandler):
                     date_from=obj.get("date_from") or "",date_to=obj.get("date_to") or "")}
             elif path=="/api/list":
                 result={"records":list_documents(category=obj.get("category") or "")}
+            elif path=="/api/status":
+                result=ollama_status()
             elif path=="/api/delete":
                 identifier=obj.get("id")
                 if type(identifier) is not int: raise ValueError("削除する記録IDが正しくありません。")
