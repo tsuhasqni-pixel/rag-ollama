@@ -42,6 +42,11 @@ select,input[type=date]{width:100%;background:white;border:1px solid #cbd7e4;pad
 <label>記録した日<input type="date" id="eventDate"></label></div>
 <label>記録名<input id="title" maxlength="160" placeholder="例：運動会の様子・今月の家計"></label><label>資料の文章<textarea id="content" maxlength="1500000" placeholder="ここに資料の内容を貼り付け"></textarea></label><button class="primary" id="add">ローカルに保存する</button>
 <div class="privacy-warning">記録はローカルSQLiteに保存しますが、暗号化は未対応です。日記・家計・子どもの記録などを含む場合は共有PCを避け、端末の保護を行ってください。</div></section>
+<section class="panel"><h2>Daymarkの日記を取り込む（任意）</h2>
+<p class="note">Daymarkの「JSONバックアップ」を自分で選び、日付ごとの日記としてFolioへコピーします。勝手に同期しません。</p>
+<label>Daymark JSONバックアップ<input type="file" id="importDaymark" accept=".json,application/json"></label>
+<button type="button" id="importDaymarkBtn" class="secondary">確認して日記を取り込む</button>
+<div class="privacy-warning">取り込み後はFolioにも独立したコピーが残ります。Daymarkで削除しても自動削除されないため、不要になったFolio側の記録も別途削除してください。</div></section>
 <section class="panel"><h2>4. 保存済み記録を管理</h2><p class="note">記録は個別に削除できます。削除後の検索やAIの参照対象からも外れます。</p><label>一覧の種類<select id="listCategory"><option value="">すべての記録</option><option>日記</option><option>家計簿</option><option>子どもの記録</option><option>仕事・学校</option><option>その他</option></select></label>
 <button id="refreshRecords" type="button">記録一覧を更新</button><div id="recordList" aria-live="polite"></div></section></aside></div></div>
 <script>
@@ -119,6 +124,24 @@ $('ask').addEventListener('click',async()=>{
     }
     msg('資料を参照して回答案を生成しました。事実関係は元の記録で確認してください。');
   }catch(e){$('answer').textContent='AIは利用できません。検索機能は引き続き使えます。';msg(e.message,true);}
+});
+$('importDaymarkBtn').addEventListener('click',async()=>{
+  const file=$('importDaymark').files?.[0];
+  if(!file){msg('先にDaymarkのJSONバックアップを選んでください。',true);return;}
+  if(file.size>10*1024*1024){msg('バックアップは10MB以下にしてください。',true);return;}
+  try{
+    const data=JSON.parse(await file.text());
+    if(data?.version!==1 || !data.entries || !Array.isArray(data.habits))
+      throw Error('Daymarkのバックアップ形式が正しくありません。');
+    const count=Object.keys(data.entries).length;
+    if(!confirm('Daymarkの日記 '+count+' 日分をFolioへコピーしますか？\n'
+      +'同じ日付のDaymarkから取り込んだ記録は更新されます。日記の内容・体調・習慣がコピーされ、以後は別々に管理されます。'))return;
+    const result=await api('/api/import/daymark',data);
+    $('importDaymark').value='';
+    await refreshRecords();
+    msg('Daymarkの記録を取り込みました。新規 '+result.imported+'件 / 更新 '+result.updated+
+        '件 / 空の記録 '+result.skipped+'件。');
+  }catch(e){msg('日記の取り込みを中止しました: '+e.message,true);}
 });
 async function refreshRecords(){
   try{
