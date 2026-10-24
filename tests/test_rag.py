@@ -37,4 +37,54 @@ class OfflineRAGTests(unittest.TestCase):
                 with self.assertRaises(ValueError):server.ollama_summary("質問",[],"qwen3:4b")
 
 
+    def test_family_records_dates_and_deletion_without_ollama(self):
+        with tempfile.TemporaryDirectory() as d:
+            with patch.object(server,"BASE",Path(d)),patch.object(server,"DB",Path(d)/"db.sqlite"):
+                child=server.add_document("遠足","公園で虫を見つけた",category="子どもの記録",event_date="2026-10-20")
+                budget=server.add_document("家計","食費が少し増えた",category="家計簿",event_date="2026-10-22")
+                self.assertEqual(server.search("公園",category="家計簿"),[])
+                self.assertEqual(server.search("公園",category="子どもの記録",
+                                               date_from="2026-10-01",date_to="2026-10-31")[0]["id"],child)
+                self.assertEqual(server.search("公園",date_from="2026-10-21"),[])
+                listing=server.list_documents(category="家計簿")
+                self.assertEqual(len(listing),1)
+                self.assertEqual(listing[0]["id"],budget)
+                self.assertNotIn("content",listing[0])
+                self.assertTrue(server.delete_document(child))
+                self.assertFalse(server.delete_document(child))
+                self.assertEqual(server.search("公園"),[])
+                self.assertEqual(server.read_excerpt([child]),"")
+
+    def test_unknown_category_and_bad_date_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            with patch.object(server,"BASE",Path(d)),patch.object(server,"DB",Path(d)/"db.sqlite"):
+                with self.assertRaises(ValueError):server.add_document("a","b",category="secret")
+                with self.assertRaises(ValueError):server.add_document("a","b",event_date="2026-02-30")
+                with self.assertRaises(ValueError):server.search("x",date_from="2026-10-25",date_to="2026-10-20")
+                with self.assertRaises(ValueError):server.delete_document(True)
+
+    def test_migrate_existing_documents_without_losing_text(self):
+        import sqlite3
+        with tempfile.TemporaryDirectory() as d:
+            db=Path(d)/"old.sqlite3"
+            con=sqlite3.connect(db)
+            con.execute("CREATE TABLE docs (id INTEGER PRIMARY KEY, title TEXT, content TEXT, created_at TEXT)")
+            con.execute("INSERT INTO docs VALUES(1,'古い記録','昔の遠足','2026-10-01')")
+            con.commit();con.close()
+            with patch.object(server,"BASE",Path(d)),patch.object(server,"DB",db):
+                hit=server.search("遠足")
+                self.assertEqual(hit[0]["title"],"古い記録")
+                self.assertEqual(hit[0]["category"],"その他")
+                self.assertEqual(hit[0]["event_date"],"")
+
+    def test_evidence_excerpt_contains_record_id_category_and_date(self):
+        with tempfile.TemporaryDirectory() as d:
+            with patch.object(server,"BASE",Path(d)),patch.object(server,"DB",Path(d)/"db.sqlite"):
+                uid=server.add_document("学校","運動会の様子",category="子どもの記録",event_date="2026-10-10")
+                excerpt=server.read_excerpt([uid])
+                self.assertIn("記録日 2026-10-10",excerpt)
+                self.assertIn("資料ID",excerpt)
+                self.assertIn("子どもの記録",excerpt)
+
+
 if __name__=="__main__":unittest.main()
