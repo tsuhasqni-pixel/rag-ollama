@@ -87,4 +87,44 @@ class OfflineRAGTests(unittest.TestCase):
                 self.assertIn("子どもの記録",excerpt)
 
 
+    def test_daymark_import_by_date_and_reimport_updates_same_copy(self):
+        with tempfile.TemporaryDirectory() as d:
+            with patch.object(server,"BASE",Path(d)),patch.object(server,"DB",Path(d)/"db.sqlite"):
+                original={
+                    "version":1,
+                    "habits":[{"id":"reading","name":"読書","active":True},
+                              {"id":"walk","name":"散歩","active":True}],
+                    "entries":{"2026-10-22":{
+                        "wake":"07:30","sleep":"23:00","mood":4,
+                        "text":"昨日は図書館へ行った。","wellbeingNote":"元気",
+                        "checks":{"reading":True,"walk":False},
+                        "habitNames":{"reading":"読書","walk":"散歩"},
+                    }}
+                }
+                r=server.import_daymark_backup(original)
+                self.assertEqual(r["imported"],1)
+                results=server.search("図書館",category="日記",date_from="2026-10-22")
+                self.assertEqual(len(results),1)
+                self.assertEqual(results[0]["event_date"],"2026-10-22")
+                src=server.read_excerpt([results[0]["id"]])
+                self.assertIn("読書",src)
+                self.assertNotIn("散歩",src)
+                original["entries"]["2026-10-22"]["text"]="今日の振り返りを追記した。"
+                again=server.import_daymark_backup(original)
+                self.assertEqual(again["imported"],0)
+                self.assertEqual(again["updated"],1)
+                self.assertEqual(len(server.list_documents(category="日記")),1)
+                self.assertTrue(server.delete_document(results[0]["id"]))
+                self.assertEqual(server.search("振り返り"),[])
+
+    def test_invalid_backup_does_not_write_partial_data(self):
+        with tempfile.TemporaryDirectory() as d:
+            with patch.object(server,"BASE",Path(d)),patch.object(server,"DB",Path(d)/"db.sqlite"):
+                invalid={"version":1,"habits":[],
+                         "entries":{"2026-10-10":{"text":"valid"},
+                                    "2026-02-30":{"text":"invalid"}}}
+                with self.assertRaises(ValueError):server.import_daymark_backup(invalid)
+                self.assertEqual(server.list_documents(),[])
+
+
 if __name__=="__main__":unittest.main()
