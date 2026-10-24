@@ -79,12 +79,23 @@ def add_document(title: str, content: str, category: str = "その他",
 
 def search(query: str, limit: int = 20, category: str = "",
            date_from: str = "", date_to: str = "") -> list[dict]:
+    """Find matching documents by words in the *body*, never just a file name.
+
+    A wider search scans all matching rows, not merely the newest 500 documents.
+    Partial multiword matches are allowed and ranked below full matches.
+    """
+    import heapq
     if category and category not in CATEGORIES:
         raise ValueError("記録の種類が正しくありません。")
     start,end=validate_date(date_from),validate_date(date_to)
-    if start and end and start>end: raise ValueError("検索の日付範囲が逆になっています。")
-    words=[x for x in re.split(r"\s+",query.strip().casefold()) if x][:10]
-    if not words: return []
+    if start and end and start>end:
+        raise ValueError("検索の日付範囲が逆になっています。")
+    if not isinstance(query,str):
+        raise ValueError("検索語が正しくありません。")
+    words=list(dict.fromkeys(x for x in re.split(r"\s+",query.strip().casefold()) if x))[:10]
+    if not words:return []
+    if len(query)>300:raise ValueError("検索語は300文字以内にしてください。")
+    limit=min(max(int(limit),1),50)
     con=connect()
     try:
         sql="SELECT id,title,content,category,event_date FROM docs WHERE 1=1"
@@ -92,21 +103,35 @@ def search(query: str, limit: int = 20, category: str = "",
         if category:sql+=" AND category=?";args.append(category)
         if start:sql+=" AND event_date>=?";args.append(start)
         if end:sql+=" AND event_date<=?";args.append(end)
-        sql+=" ORDER BY id DESC LIMIT 500"
-        rows=con.execute(sql,args).fetchall()
-    finally:con.close()
-    scored=[]
-    for row in rows:
-        title,body=row["title"],row["content"]
-        lowered=(title+"\n"+body).casefold()
-        if not all(w in lowered for w in words):continue
-        score=sum(5*title.casefold().count(w)+body.casefold().count(w) for w in words)
-        first=min((body.casefold().find(w) for w in words if body.casefold().find(w)>=0),default=0)
-        snippet=body[max(0,first-95):max(0,first-95)+320].strip()
-        scored.append({"id":row["id"],"title":title,"snippet":snippet,"score":score,
-                       "category":row["category"],"event_date":row["event_date"]})
-    scored.sort(key=lambda r:(-r["score"],-r["id"]))
-    return scored[:limit]
+        # Restrict rows via parameterized SQL, including records older than 500.
+        terms=[]
+        for word in words:
+            terms.append("(instr(lower(title),lower(?))>0 OR instr(lower(content),lower(?))>0)")
+            args.extend((word,word))
+        sql+=" AND ("+" OR ".join(terms)+")"
+        top=[]
+        for row in con.execute(sql,args):
+            title,body=row["title"],row["content"]
+            lt,lb=title.casefold(),body.casefold()
+            matched=[word for word in words if word in lt or word in lb]
+            if not matched:continue
+            full=len(matched)==len(words)
+            score=(100 if full else 0)+20*len(matched)+sum(
+                5*lt.count(word)+min(lb.count(word),10) for word in matched)
+            first=min((lb.find(word) for word in matched if lb.find(word)>=0),
+                      default=0)
+            begin=max(0,first-85)
+            payload={"id":row["id"],"title":title,
+                     "snippet":body[begin:begin+320].strip(),
+                     "score":score,"matched_terms":matched,
+                     "full_match":full,
+                     "category":row["category"],"event_date":row["event_date"]}
+            item=(score,row["id"],payload)
+            if len(top)<limit:heapq.heappush(top,item)
+            elif item[:2]>top[0][:2]:heapq.heapreplace(top,item)
+        return [row[2] for row in sorted(top,key=lambda x:(-x[0],-x[1]))]
+    finally:
+        con.close()
 
 
 def list_documents(category: str = "", limit: int = 100) -> list[dict]:
