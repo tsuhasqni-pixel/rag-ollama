@@ -30,6 +30,7 @@ async function ready(){for(let i=0;i<60;i++){try{if((await fetch('http://127.0.0
   assert((await page.locator('.result .meta').first().textContent()).includes('2026-10-20'));
   await page.locator('#searchCategory').selectOption('家計簿');
   await page.locator('#search').click();
+  await page.getByText('一致する記録はありません', {exact:false}).waitFor();
   assert.equal(await page.locator('.result').count(),0);
   await page.locator('#searchCategory').selectOption('子どもの記録');
   await page.locator('#search').click();
@@ -58,6 +59,7 @@ async function ready(){for(let i=0;i<60;i++){try{if((await fetch('http://127.0.0
   await page.locator('#recordList .record-row').filter({hasText:'秋の遠足'+w}).locator('.delete-record').click();
   await page.getByText('記録を削除しました', {exact:false}).waitFor();
   await page.locator('#search').click();
+  await page.getByText('一致する記録はありません', {exact:false}).waitFor();
   assert.equal(await page.locator('.result').count(),0);
   assert.deepEqual(errors,[],'browser JS error');
   await page.close();
