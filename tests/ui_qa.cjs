@@ -105,6 +105,7 @@ async function ready(){
   await page.locator('#eventDate').fill('2026-10-22');
   await page.locator('#add').click();
   await page.getByText('資料を保存しました',{exact:false}).waitFor();
+  await page.locator('#searchFilters summary').click();
   await page.locator('#searchCategory').selectOption('資料・書類');
   await page.locator('#query').fill(genericWord);
   await page.locator('#search').click();
