@@ -2,7 +2,7 @@ name: FolioAI Store Candidate QA UNSIGNED
 on:
   push:
     branches:
-      - codex/store-msix-20261024
+      - codex/store-ollama-download-20261024
   workflow_dispatch:
 permissions:
   contents: read
@@ -35,7 +35,7 @@ jobs:
       - name: Upload unsigned QA package and SHA-256 report
         uses: actions/upload-artifact@v4
         with:
-          name: FolioAI_1.0.0.0_x64_QA_UNSIGNED
+          name: FolioAI_1.0.1.0_x64_QA_UNSIGNED
           path: msix-out/*
           if-no-files-found: error
           retention-days: 30
