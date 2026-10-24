@@ -132,4 +132,28 @@ class OfflineRAGTests(unittest.TestCase):
 
 
 
+    def test_can_find_old_file_by_word_in_body_without_file_name_or_date(self):
+        with tempfile.TemporaryDirectory() as d:
+            with patch.object(server,"BASE",Path(d)),patch.object(server,"DB",Path(d)/"db.sqlite"):
+                old=server.add_document("untitled-001.txt","沖縄で読書会を開きました。")
+                for i in range(525):
+                    server.add_document("無関係-"+str(i),"こちらは異なる内容です。")
+                result=server.search("読書会")
+                self.assertEqual(len(result),1)
+                self.assertEqual(result[0]["id"],old)
+                self.assertEqual(result[0]["matched_terms"],["読書会"])
+                self.assertEqual(result[0]["snippet"][:2],"沖縄")
+
+    def test_partial_word_matches_rank_after_all_word_matches(self):
+        with tempfile.TemporaryDirectory() as d:
+            with patch.object(server,"BASE",Path(d)),patch.object(server,"DB",Path(d)/"db.sqlite"):
+                complete=server.add_document("ファイル01","研修の日に契約について確認しました。")
+                partial=server.add_document("ファイル02","研修の準備ができました。")
+                result=server.search("研修 契約")
+                self.assertEqual(result[0]["id"],complete)
+                self.assertTrue(result[0]["full_match"])
+                self.assertEqual(result[1]["id"],partial)
+                self.assertFalse(result[1]["full_match"])
+
+
 if __name__=="__main__":unittest.main()
