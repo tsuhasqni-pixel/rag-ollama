@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 BASE = Path(os.getenv("RAG_OLLAMA_DATA_DIR", str(Path.home() / ".rag-ollama")))
 DB = BASE / "library.sqlite3"
 ROOT = Path(__file__).parent
-MAX_REQUEST = 2_000_000
+MAX_REQUEST = 11_000_000
 CATEGORIES = ('日記', '家計簿', '子どもの記録', '仕事・学校', 'その他')
 
 def validate_date(value: str) -> str:
@@ -45,6 +45,9 @@ def connect():
             con.execute("ALTER TABLE docs ADD COLUMN category TEXT NOT NULL DEFAULT 'その他'")
         if "event_date" not in existing:
             con.execute("ALTER TABLE docs ADD COLUMN event_date TEXT NOT NULL DEFAULT ''")
+        if "source_key" not in existing:
+            con.execute("ALTER TABLE docs ADD COLUMN source_key TEXT NOT NULL DEFAULT ''")
+        con.execute("CREATE UNIQUE INDEX IF NOT EXISTS uniq_daymark_source ON docs(source_key) WHERE source_key <> ''")
         con.commit()
         return con
     except Exception:
@@ -123,6 +126,71 @@ def delete_document(identifier: int) -> bool:
     finally: con.close()
 
 
+
+def import_daymark_backup(payload: dict) -> dict:
+    """Import a user-selected Daymark JSON backup. No automatic sync or deletion."""
+    if not isinstance(payload, dict) or payload.get("version") != 1:
+        raise ValueError("DaymarkのJSONバックアップを指定してください。")
+    entries,habits=payload.get("entries"),payload.get("habits")
+    if not isinstance(entries, dict) or not isinstance(habits,list):
+        raise ValueError("バックアップ形式が正しくありません。")
+    if len(entries)>2000 or len(habits)>100:
+        raise ValueError("一度に日記2000日分、習慣100件までです。")
+    names={}
+    for h in habits:
+        if not isinstance(h,dict):raise ValueError("習慣の形式が正しくありません。")
+        if isinstance(h.get("id"),str) and isinstance(h.get("name"),str):
+            names[h["id"]]=h["name"][:60]
+    prepared=[]
+    for day,entry in entries.items():
+        day=validate_date(day)
+        if not day or not isinstance(entry,dict): raise ValueError("日記の日付または形式が不正です。")
+        checks,snapshots=entry.get("checks") or {},entry.get("habitNames") or {}
+        if not isinstance(checks,dict) or not isinstance(snapshots,dict):
+            raise ValueError("習慣チェックの形式が不正です。")
+        done=[]
+        for identifier,checked in checks.items():
+            if checked is True:
+                name=snapshots.get(identifier) or names.get(identifier)
+                if isinstance(name,str) and name.strip():done.append(name.strip()[:60])
+        text,note=entry.get("text") or "",entry.get("wellbeingNote") or ""
+        wake,sleep=entry.get("wake") or "",entry.get("sleep") or ""
+        mood=entry.get("mood") or 0
+        if not all(isinstance(v,str) for v in (text,note,wake,sleep)):
+            raise ValueError("本文や記録時刻が不正です。")
+        if type(mood) is not int or not 0<=mood<=5:
+            raise ValueError("体調評価が正しくありません。")
+        text,note=text[:12000],note[:300]
+        if not (text.strip() or note.strip() or done or wake or sleep or mood):continue
+        body="\n".join([
+            "記録日: "+day,
+            "起床: "+(wake[:5] or "未記録"),
+            "就寝: "+(sleep[:5] or "未記録"),
+            "体調: "+(str(mood) if mood else "未記録"),
+            "体調メモ: "+(note or "なし"),
+            "チェック済み習慣: "+("、".join(done) if done else "なし"),
+            "日記本文: "+(text if text.strip() else "未記録")
+        ])
+        prepared.append((day,"Daymark日記 "+day,body))
+    con=connect()
+    try:
+        added=updated=0
+        with con:
+            for date,title,body in prepared:
+                key="daymark|"+date
+                existing=con.execute("SELECT id FROM docs WHERE source_key=?",(key,)).fetchone()
+                if existing:
+                    con.execute("UPDATE docs SET title=?,content=?,category='日記',event_date=? WHERE id=?",
+                                (title,body,date,existing["id"]))
+                    updated+=1
+                else:
+                    con.execute("INSERT INTO docs (title,content,created_at,category,event_date,source_key)"
+                                " VALUES (?,?,?,'日記',?,?)",
+                                (title,body,datetime.now(timezone.utc).isoformat(),date,key))
+                    added+=1
+        return {"imported":added,"updated":updated,"skipped":len(entries)-len(prepared)}
+    finally:con.close()
+
 def read_sources(ids: list[int]) -> list[dict]:
     if not ids:return []
     if not all(type(i) is int and i>0 for i in ids[:3]):
@@ -185,7 +253,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length",str(len(raw)));self.end_headers();self.wfile.write(raw)
     def do_POST(self):
         path=urlsplit(self.path).path
-        if path not in ("/api/add","/api/search","/api/ask","/api/list","/api/delete"):
+        if path not in ("/api/add","/api/search","/api/ask","/api/list","/api/delete","/api/import/daymark"):
             return self.json_response(404,{"error":"見つかりません"})
         host=self.headers.get("Host","").split(":")[0]
         origin=self.headers.get("Origin")
@@ -206,6 +274,8 @@ class Handler(BaseHTTPRequestHandler):
                     date_from=obj.get("date_from") or "",date_to=obj.get("date_to") or "")}
             elif path=="/api/list":
                 result={"records":list_documents(category=obj.get("category") or "")}
+            elif path=="/api/import/daymark":
+                result=import_daymark_backup(obj)
             elif path=="/api/delete":
                 identifier=obj.get("id")
                 if type(identifier) is not int: raise ValueError("削除する記録IDが正しくありません。")
