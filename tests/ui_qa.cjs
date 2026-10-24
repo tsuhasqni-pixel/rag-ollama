@@ -51,6 +51,8 @@ async function ready(){
   // One remembered word is enough; typing triggers a debounced search.
   await page.locator('.result').filter({hasText:unique}).first().waitFor();
   assert((await page.locator('.result .meta').first().textContent()).includes('該当語'));
+  assert.equal(await page.locator('#searchFilters').getAttribute('open'),null,'optional filters should be hidden initially');
+  await page.locator('#searchFilters summary').click();
   await page.locator('#searchCategory').selectOption('メモ・記録');
   await page.locator('#dateFrom').fill('2026-10-01');
   await page.locator('#dateTo').fill('2026-10-31');
@@ -65,6 +67,8 @@ async function ready(){
   await page.locator('#searchCategory').selectOption('メモ・記録');
   await page.locator('#search').click();
   await page.locator('.result').first().waitFor();
+  await page.locator('#searchFilters summary').click();
+  assert.equal(await page.locator('#searchFilters').getAttribute('open'),null);
   const overscroll=await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+2);
   assert(!overscroll,'width overflow at '+w);
   await page.screenshot({path:path.join(out,'rag-'+w+'x'+h+'.png'),fullPage:true});
