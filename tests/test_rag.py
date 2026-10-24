@@ -115,4 +115,21 @@ class OfflineRAGTests(unittest.TestCase):
         self.assertNotIn("/api/import/daymark",server.Handler.do_POST.__code__.co_consts)
 
 
+    def test_optional_ollama_status_offline_and_online(self):
+        import io
+        import urllib.error
+        with patch.object(server.urllib.request,"urlopen",
+                          side_effect=urllib.error.URLError("offline")):
+            self.assertEqual(server.ollama_status(),{"available":False,"models":[]})
+        class Response:
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def read(self,n):return b'{"models":[{"name":"local-small:4b"}]}'
+        with patch.object(server.urllib.request,"urlopen",return_value=Response()) as call:
+            self.assertEqual(server.ollama_status(),
+                             {"available":True,"models":["local-small:4b"]})
+            self.assertEqual(call.call_args.kwargs["timeout"],2)
+
+
+
 if __name__=="__main__":unittest.main()
