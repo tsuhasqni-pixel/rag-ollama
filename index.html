@@ -31,6 +31,10 @@ select,input[type=date]{width:100%;background:white;border:1px solid #cbd7e4;pad
 .local-ai-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0 12px;font-size:11px;color:var(--muted)}
 .local-ai-status button{padding:7px 11px;background:#f5f8fb;border:1px solid var(--line);font-weight:600}
 
+
+.local-ai-status{align-items:flex-start}
+.ai select{display:block;width:100%;padding:11px 12px;border:1px solid #cbd7e4;border-radius:9px;background:white;font:inherit;color:var(--ink)}
+.ai a{color:var(--blue);text-decoration:underline}
 </style></head><body><div class="shell"><header class="top"><div><div class="logo">folio <span style="color:#7c98b4;font:400 12px sans-serif">/ personal knowledge</span></div><div class="subtitle">自分の資料を、自分のPCで検索する。</div></div><span class="pill">● ローカル動作</span></header>
 <section class="hero"><span class="eyebrow">YOUR PRIVATE KNOWLEDGE BASE</span><h1>必要な情報が、すぐ見つかる。</h1><p>AIがなくても言葉で検索。Ollamaが使えるときだけ、資料を元にした回答も作れます。</p></section>
 <div id="message" role="status" aria-live="polite"></div><div class="layout"><div>
@@ -40,7 +44,7 @@ select,input[type=date]{width:100%;background:white;border:1px solid #cbd7e4;pad
 <label>開始日（任意）<input id="dateFrom" type="date"></label>
 <label>終了日（任意）<input id="dateTo" type="date"></label></div>
 <p class="note">選んだ種類と日付で絞り込みます。現段階はキーワードの一致検索なので、日付・記録にないことは答えられません。</p><div id="results" aria-live="polite"><p class="hint">ここに検索結果が表示されます。</p></div></section>
-<section class="panel"><div class="row" style="justify-content:space-between"><h2>2. AIで資料に質問（任意）</h2><span class="badge">Ollama optional</span></div><div class="ai"><label>モデル名<input id="model" value="qwen3:4b" placeholder="例：qwen3:4b"></label><p class="note">検索で見つかった資料の抜粋3件だけをローカルOllamaに渡します。AIを使わない場合は検索だけで完結します。</p><div class="local-ai-status"><button id="checkAi" type="button" aria-describedby="aiStatus">接続を確認</button><span id="aiStatus" aria-live="polite">Ollama：未確認（検索は利用できます）</span></div><button id="ask">検索結果から回答を生成する</button><pre id="answer"></pre><div id="sourceList" aria-live="polite"></div></div></section>
+<section class="panel"><div class="row" style="justify-content:space-between"><h2>2. AIで資料に質問（任意）</h2><span class="badge">Ollama optional</span></div><div class="ai"><label for="model">使用するモデル（任意）<select id="model" aria-describedby="aiStatus"><option value="">接続確認後に選択できます</option></select></label><p class="note">検索で見つかった資料の抜粋3件だけをローカルOllamaに渡します。AIを使わない場合は検索だけで完結します。</p><div class="local-ai-status"><button id="checkAi" type="button" aria-describedby="aiStatus">Ollamaを探す・モデルを表示</button><span id="aiStatus" aria-live="polite">Ollama：未確認（検索は利用できます）</span></div><p class="note">未導入の場合は <a href="https://ollama.com/download" target="_blank" rel="noopener noreferrer">Ollama公式サイト</a> からインストールし、モデルを取得したあと接続確認してください。</p><button id="ask">検索結果から回答を生成する</button><pre id="answer"></pre><div id="sourceList" aria-live="polite"></div></div></section>
 </div><aside><section class="panel"><h2>3. 記録・資料を追加する</h2><p class="note">利用者自身が内容・分類・日付を選んで保存します。用途を限定せず、端末外への自動同期もしません。</p><label>ファイルから追加<input id="file" type="file" accept=".txt,.md,.csv,.json,text/plain"></label><div class="field-grid">
 <label>記録の種類<select id="category"><option>メモ・記録</option><option>資料・書類</option><option>数値・表</option><option selected>その他</option></select></label>
 <label>記録した日<input type="date" id="eventDate"></label></div>
@@ -107,22 +111,41 @@ async function find(){
 $('search').addEventListener('click',find);
 $('query').addEventListener('keydown',e=>{if(e.key==='Enter')find();});
 $('checkAi').addEventListener('click',async()=>{
-  const btn=$('checkAi'), label=$('aiStatus');
-  btn.disabled=true;label.textContent='Ollama：接続を確認中…';
+  const btn=$('checkAi'),label=$('aiStatus'),select=$('model');
+  btn.disabled=true;label.textContent='Ollama：このPCのモデルを確認中…';
   try{
     const state=await api('/api/status',{});
-    if(state.available){
-      const models=(state.models||[]).slice(0,4);
-      label.textContent='Ollama：接続可能'+(models.length?'（'+models.join('、')+'）':'（モデル未登録）');
+    select.replaceChildren();
+    const models=state.available && Array.isArray(state.models)
+      ? state.models.filter(name=>typeof name==='string' && /^[a-zA-Z0-9_.:-]{1,100}$/.test(name)).slice(0,50)
+      : [];
+    if(!models.length){
+      const option=document.createElement('option');option.value='';
+      option.textContent=state.available?'モデルが見つかりません':'Ollamaに未接続';
+      select.append(option);
+      label.textContent=state.available
+        ? 'Ollamaは動いています。モデルを取得後に再確認してください。'
+        : 'Ollama：未接続。AIなしの検索は利用できます。';
     }else{
-      label.textContent='Ollama：未接続。通常の検索は利用できます。';
+      let previous=select.value;
+      try{previous=localStorage.getItem('folio.model.v1')||previous;}catch(e){}
+      for(const name of models){
+        const option=document.createElement('option');option.value=name;option.textContent=name;select.append(option);
+      }
+      select.value=models.includes(previous)?previous:models[0];
+      try{localStorage.setItem('folio.model.v1',select.value);}catch(e){}
+      label.textContent='Ollama：接続できました。モデルを選択できます（'+models.length+'件）。';
     }
-  }catch(error){
+  }catch(e){
     label.textContent='Ollama：確認できません。通常の検索は利用できます。';
   }finally{btn.disabled=false;}
 });
+$('model').addEventListener('change',()=>{
+  try{localStorage.setItem('folio.model.v1',$('model').value);}catch(e){}
+});
 $('ask').addEventListener('click',async()=>{
   if(!hits.length){msg('先に資料を検索してください。',true);return;}
+  if(!$('model').value){msg('AI補助を使うには「Ollamaを探す」を押してモデルを選択してください。',true);$('checkAi').focus();return;}
   $('answer').textContent='ローカルAIが回答を生成中…';$('sourceList').replaceChildren();
   try{
     const r=await api('/api/ask',{
