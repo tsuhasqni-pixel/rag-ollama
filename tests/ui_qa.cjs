@@ -77,7 +77,7 @@ async function ready(){for(let i=0;i<60;i++){try{if((await fetch('http://127.0.0
   await page.locator('#dateTo').fill('2026-10-31');
   await page.locator('#query').fill(diaryWord);
   await page.locator('#search').click();
-  await page.locator('.result').first().waitFor();
+  await page.locator('.result .meta').filter({hasText:'2026-10-22'}).first().waitFor();
   assert.equal(await page.locator('.result').count(),1);
   assert((await page.locator('.result .meta').first().textContent()).includes('2026-10-22'));
   await page.locator('#searchCategory').selectOption('子どもの記録');
