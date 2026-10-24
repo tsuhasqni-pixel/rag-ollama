@@ -1,7 +1,7 @@
 name: Offline RAG Windows QA
 on:
   push:
-    branches: [codex/offline-products-20261024]
+    branches: [codex/offline-products-20261024, codex/store-msix-20261024]
   pull_request:
   workflow_dispatch:
 permissions:
