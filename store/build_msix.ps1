@@ -7,6 +7,12 @@ $cfg=Get-Content (Join-Path $root 'store/product.json') -Raw | ConvertFrom-Json
 if ($cfg.product -cne $AppName -or $cfg.release_status -cne 'QA_UNSIGNED_HOLD') {
     throw 'Packaging identity or unsigned QA state is unexpected'
 }
+$stage=Join-Path $root 'msix-stage'
+$deliver=Join-Path $root 'msix-out'
+$unpack=Join-Path $root 'msix-verify'
+foreach ($path in @($stage,$deliver,$unpack)) {
+    if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
+}
 $extra=@()
 foreach ($f in @('index.html','app.js','diary_recall.js','style.css')) {
     if (Test-Path $f) { $extra+=@('--add-data', "$f;.") }
@@ -19,10 +25,8 @@ $pyArgs=@('-m','PyInstaller','--noconfirm','--clean','--windowed','--onedir',
 if ($LASTEXITCODE -ne 0) {throw "PyInstaller failed: $LASTEXITCODE"}
 $exe=Join-Path $root "dist/$AppName/$AppName.exe"
 if (-not (Test-Path $exe)) {throw "Built Windows executable not found: $exe"}
-& $exe --self-test
-if ($LASTEXITCODE -ne 0) {throw "Bundled launcher runtime smoke test FAILED: $LASTEXITCODE"}
-$stage=Join-Path $root 'msix-stage'
-$deliver=Join-Path $root 'msix-out'
+$selfTest=Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+if ($selfTest.ExitCode -ne 0) {throw "Bundled launcher runtime smoke test FAILED: $($selfTest.ExitCode)"}
 New-Item $stage,$deliver -ItemType Directory -Force | Out-Null
 $appRelative="VFS\ProgramFilesX64\OkinawaDesktopTools\$AppName"
 $appTarget=Join-Path $stage $appRelative
@@ -40,7 +44,6 @@ if ($null -eq $makeappx) {throw 'Windows SDK MakeAppx.exe (x64) not found'}
 $package=Join-Path $deliver ("{0}_{1}_x64_STORE_CANDIDATE_QA_UNSIGNED.msix" -f $AppName,$cfg.version)
 & $makeappx.FullName pack /d "$stage" /p "$package" /o /l
 if ($LASTEXITCODE -ne 0) {throw 'MakeAppx packing failed'}
-$unpack=Join-Path $root 'msix-verify'
 & $makeappx.FullName unpack /p "$package" /d "$unpack" /o /l
 if ($LASTEXITCODE -ne 0) {throw 'MakeAppx unpack verification failed'}
 if (-not (Test-Path (Join-Path $unpack $manifestExe))) {throw 'Packaged entrypoint is missing'}

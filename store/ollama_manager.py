@@ -18,10 +18,10 @@ from pathlib import Path
 GB = 1_000_000_000
 # Ollama library published model download sizes; approximate, not runtime RAM.
 CATALOG = (
-    ("qwen3:0.6b", 523_000_000, 3.0, "軽量：短い文章の整理向け"),
-    ("qwen3:1.7b", 1_400_000_000, 5.0, "標準：普段の文章補助向け"),
-    ("qwen3:4b", 2_500_000_000, 8.0, "高めの品質：メモリに余裕があるPC向け"),
-    ("qwen3:8b", 5_200_000_000, 14.0, "大きめ：高メモリのPC向け"),
+    ("qwen3:0.6b", "Qwen3 0.6B", 523_000_000, 3.0, "軽量・低メモリ向け"),
+    ("qwen3:1.7b", "Qwen3 1.7B", 1_400_000_000, 5.0, "標準・おすすめ候補"),
+    ("qwen3:4b", "Qwen3 4B", 2_500_000_000, 8.0, "品質重視"),
+    ("qwen3:8b", "Qwen3 8B", 5_200_000_000, 14.0, "高メモリPC向け"),
 )
 API = "http://127.0.0.1:11434"
 _OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -82,7 +82,10 @@ def installed_models() -> list[str]:
 class ModelManager:
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._job: dict = {"state":"idle","model":"","status":"","percent":0,"busy":False}
+        self._job: dict = {
+            "state":"idle", "phase":"idle", "model":"", "status":"",
+            "percent":0, "busy":False,
+        }
         self._thread: threading.Thread | None = None
 
     def catalog(self) -> dict:
@@ -96,17 +99,20 @@ class ModelManager:
         except (urllib.error.URLError, TimeoutError, OSError, ValueError):
             connected, installed = False, set()
         rows = []
-        for name,size,min_ram,summary in CATALOG:
+        for name,label,size,min_ram,summary in CATALOG:
             present=name in installed
-            enough_ram = ram is None or ram >= min_ram*GB
-            enough_disk = free is None or free >= int(size*1.35+300_000_000)
+            # Unknown capacity is not treated as permission for a multi-GB pull.
+            # Installed models remain usable, while new downloads require both
+            # Windows RAM and the actual Ollama model drive to be measurable.
+            enough_ram = ram is not None and ram >= min_ram*GB
+            enough_disk = free is not None and free >= int(size*1.35+300_000_000)
             fits=enough_ram and (enough_disk or present)
             reason = ("インストール済み" if present else
+                      "PCの容量を確認できないため自動取得できません" if ram is None or free is None else
                       "メモリ容量が目安より少ない" if not enough_ram else
                       "空き容量が不足" if not enough_disk else
-                      "容量の目安を満たしています" if ram is not None and free is not None else
-                      "一部容量を確認できません。手動で確認してください")
-            rows.append({"id":name,"download_bytes":size,"min_ram_gb":min_ram,
+                      "容量の目安を満たしています")
+            rows.append({"id":name,"label":label,"download_bytes":size,"min_ram_gb":min_ram,
                          "description":summary,"installed":present,
                          "fits":fits,"reason":reason})
         # Existing models from other families remain selectable, but only
@@ -117,7 +123,7 @@ class ModelManager:
                 continue
             if not all(c.isalnum() or c in "._:-" for c in name):
                 continue
-            rows.append({"id":name,"download_bytes":None,"min_ram_gb":None,
+            rows.append({"id":name,"label":name,"download_bytes":None,"min_ram_gb":None,
                          "description":"既に導入済みのモデル",
                          "installed":True,"fits":True,
                          "reason":"インストール済み（実行時RAMは未評価）"})
@@ -143,14 +149,15 @@ class ModelManager:
             raise RuntimeError("Ollamaが見つかりません。先にOllamaをインストール・起動してください。")
         entry=next(m for m in catalog["models"] if m["id"]==model)
         if entry["installed"]:
-            return {"state":"ready","model":model,"status":"すでにインストール済みです。","percent":100,"busy":False}
+            return {"state":"ready","phase":"complete","model":model,
+                    "status":"すでにインストール済みです。","percent":100,"busy":False}
         if not entry["fits"]:
             raise ValueError("このPCのメモリまたは空き容量が不足しています。小さいモデルを選んでください。")
         with self._lock:
             if self._job["busy"]:
                 raise RuntimeError("モデルを取得中です。完了を確認してから次を選んでください。")
-            self._job={"state":"running","model":model,"status":"ダウンロード準備中",
-                       "percent":0,"busy":True}
+            self._job={"state":"running","phase":"preparing","model":model,
+                       "status":"ダウンロード準備中","percent":0,"busy":True}
             self._thread=threading.Thread(target=self._pull,args=(model,),daemon=True)
             self._thread.start()
             return dict(self._job)
@@ -178,20 +185,44 @@ class ModelManager:
                         continue
                     if event.get("error"):
                         raise RuntimeError(str(event["error"])[:240])
-                    status=str(event.get("status") or "ダウンロード中")[:120]
+                    raw_status=str(event.get("status") or "")[:120]
                     total=event.get("total")
                     done=event.get("completed")
-                    updates={"status":status}
+                    lower=raw_status.casefold()
+                    if "verif" in lower or "writ" in lower or "remov" in lower:
+                        updates={"phase":"verifying","status":"検証中"}
+                    elif (isinstance(total,(int,float)) and not isinstance(total,bool)
+                          and total>0):
+                        updates={"phase":"downloading","status":"ダウンロード中"}
+                    else:
+                        updates={"phase":"preparing","status":"ダウンロード準備中"}
                     if isinstance(total,(int,float)) and not isinstance(total,bool) and total>0 and isinstance(done,(int,float)) and not isinstance(done,bool):
                         updates["percent"]=min(99,max(0,int(100*done/total)))
                     self._change(**updates)
-                    if status=="success":
+                    if raw_status=="success":
                         success=True
             if not success:
                 raise RuntimeError("取得の完了通知を受け取れませんでした。モデル一覧を再確認してください。")
-            self._change(state="ready",status="取得完了。AI補助を利用できます。",percent=100,busy=False)
+            self._change(state="ready",phase="complete",
+                         status="インストール完了。AI補助を利用できます。",
+                         percent=100,busy=False)
         except (OSError, urllib.error.URLError, TimeoutError, RuntimeError, ValueError) as exc:
-            self._change(state="error",status="取得に失敗: "+str(exc)[:250],busy=False)
+            self._change(state="error",phase="error",status=self._friendly_error(exc),busy=False)
+
+    @staticmethod
+    def _friendly_error(exc: BaseException) -> str:
+        detail=str(exc).casefold()
+        if "space" in detail or "disk" in detail or "storage" in detail:
+            return "エラー発生：ディスクの空き容量が不足しています。不要なファイルを整理し、小さいモデルで再試行してください。"
+        if "timed out" in detail or "timeout" in detail:
+            return "エラー発生：通信がタイムアウトしました。インターネット接続を確認して、もう一度お試しください。"
+        if ("refused" in detail or "10061" in detail or "reset" in detail
+                or "broken pipe" in detail):
+            return "エラー発生：Ollamaとの接続が切れました。Ollamaを起動したまま、もう一度お試しください。"
+        if ("network" in detail or "resolve" in detail or "temporary failure" in detail
+                or "get https" in detail):
+            return "エラー発生：モデル配布先へ接続できません。インターネット接続を確認して再試行してください。"
+        return "エラー発生：モデルを取得できませんでした。Ollamaの起動、ネット接続、空き容量を確認してください。"
 
 
 MANAGER = ModelManager()

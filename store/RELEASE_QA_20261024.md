@@ -1,14 +1,14 @@
 # Microsoft Store MSIX — Windows候補と出荷HOLD
 
 更新日: 2026-10-24 JST
-ブランチ: codex/store-msix-20261024（main/release直変更なし）
+ブランチ: codex/store-ollama-download-20261024（main/release直変更なし）
 用途: QA_UNSIGNED / Store候補の内部テスト
 
 ## Partner Center表示に照合したIdentity
 - Name: OkinawaDesktopTools.FolioAI
 - Publisher: CN=46263F21-A700-41DB-8C9B-114C22FB82FC
 - PublisherDisplayName: Okinawa Desktop Tools
-- Version（今回の候補）: 1.0.0.0
+- Version（今回の候補）: 1.0.2.0
 - Architecture: x64
 - 引用元: ユーザーが示したPartner Centerの製品Identity画面（2026-10-24）
 - Partner Center APIによるストア関連付けとアップロード: 未実施
@@ -22,7 +22,7 @@
 
 ## ビルド結果と使い方
 - ワークフロー: .github/workflows/store-msix-candidate.yml（Windows 2022）
-- 出力MSIX: FolioAI_1.0.0.0_x64_STORE_CANDIDATE_QA_UNSIGNED.msix
+- 出力MSIX: FolioAI_1.0.2.0_x64_STORE_CANDIDATE_QA_UNSIGNED.msix
 - 出力レポート: QA_UNSIGNED_BUILD_REPORT.json。バイト数とSHA-256はこのファイルで照合する。
 - 現在のMSIXはQA_UNSIGNED。未署名なので通常Windowsへ直接インストールできる完成版とはみなさない。
 - GitHub Actionsの成功はStore掲載・WACK・署名済みMSIXの動作確認を意味しない。

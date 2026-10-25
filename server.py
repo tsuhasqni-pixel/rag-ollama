@@ -22,6 +22,7 @@ DB = BASE / "library.sqlite3"
 ROOT = Path(__file__).parent
 MAX_REQUEST = 2_000_000
 CATEGORIES = ('メモ・記録', '資料・書類', '数値・表', 'その他')
+OLLAMA_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 def validate_date(value: str) -> str:
     if not value: return ""
@@ -206,7 +207,7 @@ def ollama_status() -> dict:
     """Explicit, bounded local service check; no hardware permissions or polling."""
     req=urllib.request.Request("http://127.0.0.1:11434/api/tags",method="GET")
     try:
-        with urllib.request.urlopen(req,timeout=2) as response:
+        with OLLAMA_OPENER.open(req,timeout=2) as response:
             data=json.loads(response.read(100_000))
         if not isinstance(data,dict) or not isinstance(data.get("models"),list):
             return {"available":False,"models":[]}
@@ -230,7 +231,7 @@ def ollama_summary(query: str, refs: list[int], model: str) -> str:
     req=urllib.request.Request("http://127.0.0.1:11434/api/generate",data=body,
                                headers={"Content-Type":"application/json"},method="POST")
     try:
-        with urllib.request.urlopen(req,timeout=60) as response:
+        with OLLAMA_OPENER.open(req,timeout=60) as response:
             return str(json.loads(response.read(130_000)).get("response") or "")[:6000]
     except (urllib.error.URLError,TimeoutError,ValueError) as e:
         raise RuntimeError("Ollamaに接続できません。AIなしの検索は引き続き使えます。") from e
