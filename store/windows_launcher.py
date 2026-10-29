@@ -19,7 +19,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 # The bundled server.py is the only backend. No user data is baked into MSIX.
-from server import LocalHandler
+from server import Handler as LocalHandler
 
 APP_NAME = "FolioAI"
 PORT = 8775
@@ -35,7 +35,7 @@ def friendly_error(message: str) -> None:
 
 
 def run_self_test(base: str) -> None:
-    for path in (('/', '/index.html')):
+    for path in (('/', '/index.html', '/model_picker.js')):
         with urllib.request.urlopen(base + path, timeout=5) as response:
             body = response.read()
             if response.status != 200 or not body:
@@ -45,7 +45,7 @@ def run_self_test(base: str) -> None:
 
 def main() -> int:
     try:
-        # Bind strictly to loopback. Fixed port preserves diary origin across runs.
+        # Bind strictly to loopback. The fixed port keeps the desktop origin stable.
         server = ThreadingHTTPServer(("127.0.0.1", PORT), LocalHandler)
     except OSError as exc:
         friendly_error(

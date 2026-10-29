@@ -47,6 +47,11 @@ select,input[type=date]{width:100%;background:white;border:1px solid #cbd7e4;pad
 .doc-body{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.85;max-height:65vh}
 .result-actions{margin-top:7px}
 .result-actions button{padding:8px 12px;background:#edf3fa;font-size:12px}
+
+#ollamaDownloadProgress{width:100%;height:11px;accent-color:#315f9b}
+.setup-step{display:block;color:var(--blue);margin:12px 0 5px}.model-actions{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.model-actions select{flex:1;min-width:230px}.model-actions button{margin:0}
+.ollama-dialog{width:min(540px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;border:1px solid var(--line);border-radius:14px;padding:23px;background:var(--paper);color:var(--ink);box-shadow:0 18px 55px #152d4945}.ollama-dialog::backdrop{background:#18345078}.download-facts{display:grid;gap:8px;margin:17px 0}.download-facts div{display:grid;grid-template-columns:minmax(145px,.8fr) minmax(0,1.2fr);gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}.download-facts dt{color:var(--muted);font-size:11px;font-weight:700}.download-facts dd{margin:0;font-weight:700}.download-warning{background:#fff7e6;border:1px solid #ead5a0;border-radius:9px;padding:12px;font-size:12px}.dialog-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:17px}
+@media(max-width:520px){.download-facts div{grid-template-columns:1fr;gap:2px}.dialog-actions{flex-direction:column-reverse}.dialog-actions button{width:100%}}
 </style></head><body><div class="shell"><header class="top"><div><div class="logo">folio <span style="color:#7c98b4;font:400 12px sans-serif">/ personal knowledge</span></div><div class="subtitle">自分の資料を、自分のPCで検索する。</div></div><span class="pill">● ローカル動作</span></header>
 <section class="hero"><span class="eyebrow">YOUR PRIVATE KNOWLEDGE BASE</span><h1>必要な情報が、すぐ見つかる。</h1><p>AIがなくても言葉で検索。Ollamaが使えるときだけ、資料を元にした回答も作れます。</p></section>
 <div id="message" role="status" aria-live="polite"></div><div class="layout"><div>
@@ -56,7 +61,10 @@ select,input[type=date]{width:100%;background:white;border:1px solid #cbd7e4;pad
 <label>開始日（任意）<input id="dateFrom" type="date"></label>
 <label>終了日（任意）<input id="dateTo" type="date"></label></div></details>
 <p class="note">資料名や保存した日付を覚える必要はありません。 本文に含まれる単語から探します。入力すると自動検索し、必要なときだけ種類や期間で絞れます。</p><div id="results" aria-live="polite"><p class="hint">ここに検索結果が表示されます。</p></div></section>
-<section class="panel"><div class="row" style="justify-content:space-between"><h2>2. AIで資料に質問（任意）</h2><span class="badge">Ollama optional</span></div><div class="ai"><label for="model">使用するモデル（任意）<select id="model" aria-describedby="aiStatus"><option value="">接続確認後に選択できます</option></select></label><p class="note">検索で見つかった資料の抜粋3件だけをローカルOllamaに渡します。AIを使わない場合は検索だけで完結します。</p><div class="local-ai-status"><button id="checkAi" type="button" aria-describedby="aiStatus">Ollamaを探す・モデルを表示</button><span id="aiStatus" aria-live="polite">Ollama：未確認（検索は利用できます）</span></div><p class="note">未導入の場合は <a href="https://ollama.com/download" target="_blank" rel="noopener noreferrer">Ollama公式サイト</a> からインストールし、モデルを取得したあと接続確認してください。</p><button id="ask">検索結果から回答を生成する</button><pre id="answer"></pre><div id="sourceList" aria-live="polite"></div></div></section>
+<section class="panel"><div class="row" style="justify-content:space-between"><h2>2. AIで資料に質問（任意）</h2><span class="badge">Ollama optional</span></div><div class="ai"><p class="note">検索で見つかった資料の抜粋3件だけをローカルOllamaに渡します。AIを使わない場合は検索だけで完結します。</p><div class="local-ai-status"><button id="checkAi" type="button" aria-describedby="aiStatus">AIを使ってみる</button><span id="aiStatus" aria-live="polite">Ollama：未確認（検索は利用できます）</span></div><strong class="setup-step">このPCにおすすめのモデル</strong><label for="model">モデルを選ぶ</label><div class="model-actions"><select id="model" aria-describedby="aiStatus"><option value="">接続確認後に選択できます</option></select><button id="downloadModel" type="button" class="primary" disabled>ダウンロードする</button></div><p id="ollamaModelDetail" class="note">「AIを使ってみる」を押すと、このPCに合う候補を表示します。</p><p id="pcCapacity" class="note">PC容量の確認後、おすすめのモデルを表示します。</p>
+<progress id="ollamaDownloadProgress" max="100" value="0" hidden aria-label="モデルのダウンロード進捗"></progress>
+<p id="ollamaDownloadStatus" class="note" aria-live="polite"></p>
+<p class="note">Ollama本体は無断でインストールしません。未導入の場合は <a href="https://ollama.com/download/windows" target="_blank" rel="noopener noreferrer">Ollama公式Windowsインストールページ</a> から導入・起動してください。モデルは確認画面で承認した場合だけ取得します。</p><button id="ask">AIを使う：検索結果から回答を生成</button><pre id="answer"></pre><div id="sourceList" aria-live="polite"></div></div></section>
 </div><aside><section class="panel"><h2>3. 記録・資料を追加する</h2><p class="note">利用者自身が内容・分類・日付を選んで保存します。用途を限定せず、端末外への自動同期もしません。</p><label>ファイルから追加<input id="file" type="file" accept=".txt,.md,.csv,.json,text/plain"></label><div class="field-grid">
 <label>記録の種類<select id="category"><option>メモ・記録</option><option>資料・書類</option><option>数値・表</option><option selected>その他</option></select></label>
 <label>記録した日<input type="date" id="eventDate"></label></div>
@@ -64,6 +72,13 @@ select,input[type=date]{width:100%;background:white;border:1px solid #cbd7e4;pad
 <div class="privacy-warning">記録はローカルSQLiteに保存しますが、暗号化は未対応です。個人情報や機密資料の保存には、端末の保護と権限管理が必要です。</div></section>
 <section class="panel"><h2>4. 保存済み記録を管理</h2><p class="note">記録は個別に削除できます。削除後の検索やAIの参照対象からも外れます。</p><label>一覧の種類<select id="listCategory"><option value="">すべての記録</option><option>メモ・記録</option><option>資料・書類</option><option>数値・表</option><option>その他</option></select></label>
 <button id="refreshRecords" type="button">記録一覧を更新</button><div id="recordList" aria-live="polite"></div></section></aside></div></div>
+<dialog id="ollamaConfirmDialog" class="ollama-dialog" aria-labelledby="ollamaConfirmTitle">
+  <h2 id="ollamaConfirmTitle">モデルをダウンロードしますか？</h2>
+  <p class="note">次のモデルを、このPCで動作中のOllamaへ取得します。</p>
+  <dl class="download-facts"><div><dt>モデル</dt><dd id="confirmModelName"></dd></div><div><dt>ダウンロード容量の目安</dt><dd id="confirmModelSize"></dd></div><div><dt>PCのメモリ目安</dt><dd id="confirmModelRam"></dd></div></dl>
+  <p class="download-warning">インターネット通信が必要です。通信環境やモデルの大きさにより、数分から数十分以上かかる場合があります。</p>
+  <div class="dialog-actions"><button id="cancelModelDownload" type="button">戻る</button><button id="confirmModelDownload" type="button" class="primary">ダウンロードする</button></div>
+</dialog>
 <dialog id="docDialog" class="doc-dialog" aria-labelledby="docTitle">
   <div class="doc-dialog-header">
     <div><h2 id="docTitle">資料を開く</h2><p id="docMeta" class="note"></p></div>
@@ -71,6 +86,7 @@ select,input[type=date]{width:100%;background:white;border:1px solid #cbd7e4;pad
   </div>
   <pre id="docContent" class="doc-body"></pre>
 </dialog>
+<script src="./model_picker.js"></script>
 <script>
 const $=id=>document.getElementById(id);let hits=[];let lastRequest=0,searchDebounce=null;
 function msg(s,error=false){$('message').textContent=s;$('message').className=error?'error':'';}
@@ -161,46 +177,21 @@ $('query').addEventListener('keydown',e=>{
 for(const id of ['searchCategory','dateFrom','dateTo']){
   $(id).addEventListener('change',()=>{if($('query').value.trim())find();});
 }
-$('checkAi').addEventListener('click',async()=>{
-  const btn=$('checkAi'),label=$('aiStatus'),select=$('model');
-  btn.disabled=true;label.textContent='Ollama：このPCのモデルを確認中…';
-  try{
-    const state=await api('/api/status',{});
-    select.replaceChildren();
-    const models=state.available && Array.isArray(state.models)
-      ? state.models.filter(name=>typeof name==='string' && /^[a-zA-Z0-9_.:-]{1,100}$/.test(name)).slice(0,50)
-      : [];
-    if(!models.length){
-      const option=document.createElement('option');option.value='';
-      option.textContent=state.available?'モデルが見つかりません':'Ollamaに未接続';
-      select.append(option);
-      label.textContent=state.available
-        ? 'Ollamaは動いています。モデルを取得後に再確認してください。'
-        : 'Ollama：未接続。AIなしの検索は利用できます。';
-    }else{
-      let previous=select.value;
-      try{previous=localStorage.getItem('folio.model.v1')||previous;}catch(e){}
-      for(const name of models){
-        const option=document.createElement('option');option.value=name;option.textContent=name;select.append(option);
-      }
-      select.value=models.includes(previous)?previous:models[0];
-      try{localStorage.setItem('folio.model.v1',select.value);}catch(e){}
-      label.textContent='Ollama：接続できました。モデルを選択できます（'+models.length+'件）。';
-    }
-  }catch(e){
-    label.textContent='Ollama：確認できません。通常の検索は利用できます。';
-  }finally{btn.disabled=false;}
-});
-$('model').addEventListener('change',()=>{
-  try{localStorage.setItem('folio.model.v1',$('model').value);}catch(e){}
+const ollamaPicker=OllamaSetup.setup({
+  select:'model',button:'checkAi',download:'downloadModel',info:'aiStatus',
+  system:'pcCapacity',detail:'ollamaModelDetail',progress:'ollamaDownloadProgress',
+  progressText:'ollamaDownloadStatus',base:'/api',
+  dialog:'ollamaConfirmDialog',dialogModel:'confirmModelName',
+  dialogSize:'confirmModelSize',dialogRam:'confirmModelRam',
+  confirmDownload:'confirmModelDownload',cancelDownload:'cancelModelDownload',api
 });
 $('ask').addEventListener('click',async()=>{
   if(!hits.length){msg('先に資料を検索してください。',true);return;}
-  if(!$('model').value){msg('AI補助を使うには「Ollamaを探す」を押してモデルを選択してください。',true);$('checkAi').focus();return;}
+  if(!ollamaPicker.selectedModel()){msg('AI補助を使うには「AIを使ってみる」を押してモデルを選択してください。',true);$('checkAi').focus();return;}
   $('answer').textContent='ローカルAIが回答を生成中…';$('sourceList').replaceChildren();
   try{
     const r=await api('/api/ask',{
-      query:$('query').value,ids:hits.slice(0,3).map(x=>x.id),model:$('model').value
+      query:$('query').value,ids:hits.slice(0,3).map(x=>x.id),model:ollamaPicker.selectedModel()
     });
     $('answer').textContent=r.answer||'回答なし';
     const title=document.createElement('strong');title.textContent='参照した記録';

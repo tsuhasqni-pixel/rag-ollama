@@ -5,6 +5,10 @@ const root=path.join(__dirname,'..'),out=path.join(root,'qa-screenshots');
 fs.mkdirSync(out,{recursive:true});
 const tmpDb=fs.mkdtempSync(path.join(os.tmpdir(),'rag-ollama-test-'));
 const worker=spawn('python',['server.py'],{cwd:root,stdio:'pipe',env:{...process.env,RAG_OLLAMA_DATA_DIR:tmpDb}});
+let workerOutput='';
+for(const stream of [worker.stdout,worker.stderr])stream.on('data',chunk=>{
+  workerOutput=(workerOutput+chunk.toString('utf8')).slice(-4000);
+});
 async function ready(){
  for(let i=0;i<60;i++){
    const ok=await new Promise(resolve=>{
@@ -15,7 +19,7 @@ async function ready(){
    if(ok)return;
    await new Promise(r=>setTimeout(r,150));
  }
- throw Error('local RAG server did not start');
+ throw Error('local RAG server did not start; exit='+worker.exitCode+'; '+workerOutput.trim());
 }
 (async()=>{
  await ready();const browser=await chromium.launch({headless:true,channel:'msedge'});
@@ -26,20 +30,50 @@ async function ready(){
   await page.goto('http://127.0.0.1:8775');
   // AI status is explicit: no Ollama request just to open the page.
   assert((await page.locator('#aiStatus').textContent()).includes('未確認'));
-  await page.route('**/api/status',route=>route.fulfill({status:200,contentType:'application/json',
-     body:JSON.stringify({available:false,models:[]})}));
+  const modelCatalog={
+    available:true,ram_gb:8,disk_free_gb:10,recommended:'qwen3:1.7b',
+    models:[
+      {id:'qwen3:0.6b',label:'Qwen3 0.6B',description:'軽量・低メモリ向け',download_bytes:523000000,min_ram_gb:3,installed:true,fits:true,reason:'インストール済み'},
+      {id:'qwen3:1.7b',label:'Qwen3 1.7B',description:'標準・おすすめ候補',download_bytes:1400000000,min_ram_gb:5,installed:false,fits:true,reason:'容量OK'},
+      {id:'qwen3:8b',label:'Qwen3 8B',description:'高メモリPC向け',download_bytes:5200000000,min_ram_gb:14,installed:false,fits:false,reason:'メモリ容量が目安より少ない'}
+    ]
+  };
+  await page.route('**/api/catalog',route=>route.fulfill({
+    status:200,contentType:'application/json',body:JSON.stringify({...modelCatalog,available:false})
+  }));
   await page.locator('#checkAi').click();
-  await page.getByText('Ollama：未接続', {exact:false}).waitFor();
-  await page.unroute('**/api/status');
-  // Optional local Ollama model selector can be used without entering model IDs.
-  await page.route('**/api/status',route=>route.fulfill({status:200,contentType:'application/json',
-     body:JSON.stringify({available:true,models:['qwen3:4b','gemma3:1b']})}));
+  await page.getByText('Ollamaが見つかりません',{exact:false}).waitFor();
+  await page.unroute('**/api/catalog');
+  let downloaded=false,pulledModel=null,pullFinished=false;
+  await page.route('**/api/catalog',route=>route.fulfill({
+    status:200,contentType:'application/json',body:JSON.stringify({...modelCatalog,
+      models:modelCatalog.models.map(m=>m.id==='qwen3:1.7b'?{...m,installed:downloaded}:m)})
+  }));
   await page.locator('#checkAi').click();
-  await page.getByText('Ollama：接続できました', {exact:false}).waitFor();
-  await page.locator('#model').selectOption('gemma3:1b');
-  assert.equal(await page.locator('#model').inputValue(),'gemma3:1b');
-  await page.screenshot({path:path.join(out,'ai-model-setup-'+w+'x'+h+'.png'),fullPage:true});
-  await page.unroute('**/api/status');
+  await page.getByText('このPCにおすすめ：Qwen3 1.7B',{exact:false}).waitFor();
+  assert((await page.locator('#pcCapacity').textContent()).includes('8GB'));
+  assert.equal(await page.locator('#model option:disabled').count(),1);
+  assert.equal(await page.locator('#model').inputValue(),'qwen3:1.7b');
+  await page.screenshot({path:path.join(out,'ollama-model-selection-'+w+'x'+h+'.png'),fullPage:true});
+  await page.route('**/api/pull',route=>{
+    pulledModel=route.request().postDataJSON().model;downloaded=true;
+    route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({state:'running',phase:'preparing',model:pulledModel,percent:0,busy:true})});
+  });
+  await page.route('**/api/pull/status',route=>route.fulfill({status:200,contentType:'application/json',
+    body:JSON.stringify(pullFinished?
+      {state:'ready',phase:'complete',model:'qwen3:1.7b',percent:100,busy:false}:
+      {state:'running',phase:'downloading',model:'qwen3:1.7b',status:'ダウンロード中',percent:42,busy:true})}));
+  assert.equal(pulledModel,null,'selection alone must not start a large download');
+  await page.locator('#downloadModel').click();
+  await page.locator('#ollamaConfirmDialog').waitFor({state:'visible'});
+  await page.screenshot({path:path.join(out,'ollama-download-confirm-'+w+'x'+h+'.png'),fullPage:true});
+  await page.locator('#confirmModelDownload').click();
+  await page.getByText('ダウンロード中：42%',{exact:false}).waitFor();
+  await page.screenshot({path:path.join(out,'ollama-download-progress-'+w+'x'+h+'.png'),fullPage:true});
+  assert.equal(pulledModel,'qwen3:1.7b');
+  pullFinished=true;
+  await page.getByText('インストール完了',{exact:false}).waitFor({timeout:5000});
+  await page.screenshot({path:path.join(out,'ollama-download-complete-'+w+'x'+h+'.png'),fullPage:true});
   const unique='企画案'+w;
   await page.locator('#title').fill('作業メモ'+w);
   await page.locator('#category').selectOption('メモ・記録');
@@ -89,7 +123,7 @@ async function ready(){
   await page.locator('#ask').click();
   await page.locator('#sourceList .source').first().waitFor();
   assert.equal(asked.ids.length,1);
-  assert.equal(asked.model,'gemma3:1b');
+  assert.equal(asked.model,'qwen3:1.7b');
   assert((await page.locator('#sourceList').textContent()).includes('2026-10-20'));
   await page.unroute('**/api/ask');
   // Deleting the record removes it from saved documents and from retrieval.
@@ -117,6 +151,9 @@ async function ready(){
   await page.locator('.result .meta').filter({hasText:'2026-10-22'}).first().waitFor();
   assert.equal(await page.locator('.result').count(),1);
   assert.deepEqual(errors,[],'browser JS error');
+  await page.unroute('**/api/catalog');
+  await page.unroute('**/api/pull');
+  await page.unroute('**/api/pull/status');
   await page.close();
  }
  console.log('RAG keyword search and browser screenshot QA PASS');

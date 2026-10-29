@@ -15,12 +15,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 from datetime import datetime, timezone
+from store.ollama_manager import MANAGER
 
 BASE = Path(os.getenv("RAG_OLLAMA_DATA_DIR", str(Path.home() / ".rag-ollama")))
 DB = BASE / "library.sqlite3"
 ROOT = Path(__file__).parent
 MAX_REQUEST = 2_000_000
 CATEGORIES = ('メモ・記録', '資料・書類', '数値・表', 'その他')
+OLLAMA_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 def validate_date(value: str) -> str:
     if not value: return ""
@@ -205,7 +207,7 @@ def ollama_status() -> dict:
     """Explicit, bounded local service check; no hardware permissions or polling."""
     req=urllib.request.Request("http://127.0.0.1:11434/api/tags",method="GET")
     try:
-        with urllib.request.urlopen(req,timeout=2) as response:
+        with OLLAMA_OPENER.open(req,timeout=2) as response:
             data=json.loads(response.read(100_000))
         if not isinstance(data,dict) or not isinstance(data.get("models"),list):
             return {"available":False,"models":[]}
@@ -229,7 +231,7 @@ def ollama_summary(query: str, refs: list[int], model: str) -> str:
     req=urllib.request.Request("http://127.0.0.1:11434/api/generate",data=body,
                                headers={"Content-Type":"application/json"},method="POST")
     try:
-        with urllib.request.urlopen(req,timeout=60) as response:
+        with OLLAMA_OPENER.open(req,timeout=60) as response:
             return str(json.loads(response.read(130_000)).get("response") or "")[:6000]
     except (urllib.error.URLError,TimeoutError,ValueError) as e:
         raise RuntimeError("Ollamaに接続できません。AIなしの検索は引き続き使えます。") from e
@@ -242,15 +244,16 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control","no-store")
         self.send_header("Content-Length",str(len(raw)));self.end_headers();self.wfile.write(raw)
     def do_GET(self):
-        if urlsplit(self.path).path not in ("/","/index.html"):
+        route=urlsplit(self.path).path
+        if route not in ("/","/index.html","/model_picker.js"):
             return self.json_response(404,{"error":"見つかりません"})
-        raw=(ROOT/"index.html").read_bytes()
-        self.send_response(200);self.send_header("Content-Type","text/html; charset=utf-8")
+        raw=(ROOT/"store"/"model_picker.js").read_bytes() if route=="/model_picker.js" else (ROOT/"index.html").read_bytes()
+        self.send_response(200);self.send_header("Content-Type","text/javascript; charset=utf-8" if route=="/model_picker.js" else "text/html; charset=utf-8")
         self.send_header("Content-Security-Policy","default-src 'self'; connect-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; object-src 'none'; frame-ancestors 'none'")
         self.send_header("Content-Length",str(len(raw)));self.end_headers();self.wfile.write(raw)
     def do_POST(self):
         path=urlsplit(self.path).path
-        if path not in ("/api/add","/api/search","/api/ask","/api/list","/api/delete","/api/status","/api/get"):
+        if path not in ("/api/add","/api/search","/api/ask","/api/list","/api/delete","/api/status","/api/get","/api/catalog","/api/pull","/api/pull/status"):
             return self.json_response(404,{"error":"見つかりません"})
         host=self.headers.get("Host","").split(":")[0]
         origin=self.headers.get("Origin")
@@ -271,6 +274,15 @@ class Handler(BaseHTTPRequestHandler):
                     date_from=obj.get("date_from") or "",date_to=obj.get("date_to") or "")}
             elif path=="/api/list":
                 result={"records":list_documents(category=obj.get("category") or "")}
+            elif path=="/api/catalog":
+                result=MANAGER.catalog()
+            elif path=="/api/pull/status":
+                result=MANAGER.status()
+            elif path=="/api/pull":
+                model=obj.get("model")
+                if not isinstance(model,str):
+                    raise ValueError("モデルを選んでください。")
+                result=MANAGER.start(model)
             elif path=="/api/status":
                 result=ollama_status()
             elif path=="/api/get":
