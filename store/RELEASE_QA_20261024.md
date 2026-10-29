@@ -1,6 +1,6 @@
 # Microsoft Store MSIX — Windows候補と出荷HOLD
 
-更新日: 2026-10-24 JST
+更新日: 2026-10-29 JST
 ブランチ: codex/store-ollama-download-20261024（main/release直変更なし）
 用途: QA_UNSIGNED / Store候補の内部テスト
 
@@ -8,7 +8,7 @@
 - Name: OkinawaDesktopTools.FolioAI
 - Publisher: CN=46263F21-A700-41DB-8C9B-114C22FB82FC
 - PublisherDisplayName: Okinawa Desktop Tools
-- Version（今回の候補）: 1.0.2.0
+- Version（今回の候補）: 1.0.2.1
 - Architecture: x64
 - 引用元: ユーザーが示したPartner Centerの製品Identity画面（2026-10-24）
 - Partner Center APIによるストア関連付けとアップロード: 未実施
@@ -22,18 +22,17 @@
 
 ## ビルド結果と使い方
 - ワークフロー: .github/workflows/store-msix-candidate.yml（Windows 2022）
-- 出力MSIX: FolioAI_1.0.2.0_x64_STORE_CANDIDATE_QA_UNSIGNED.msix
+- 出力MSIX: FolioAI_1.0.2.1_x64_STORE_CANDIDATE_QA_UNSIGNED.msix
 - 出力レポート: QA_UNSIGNED_BUILD_REPORT.json。バイト数とSHA-256はこのファイルで照合する。
+- 1.0.2.1では実行ファイルにPerMonitorV2 DPIマニフェストを埋め込み、ローカル実機QA専用のテスト署名オプションを追加。既定のActions出力は従来どおりQA_UNSIGNED。
 - 現在のMSIXはQA_UNSIGNED。未署名なので通常Windowsへ直接インストールできる完成版とはみなさない。
 - GitHub Actionsの成功はStore掲載・WACK・署名済みMSIXの動作確認を意味しない。
 
 ## 販売前HOLD
-1. MSIXをWindows実機にインストールして起動・終了・再起動後の記録復元を確認。WebView2有無、複数起動、IMEも確認する。
-2. 1280x720、1024x768の画面表示と実アプリからのStore用スクリーンショットを取得。
-3. Ollama接続、モデル導入、長文応答、AIが存在しない日付の事実を創作しないかの実機QA。
-4. 個人データ保護: Daymark localStorage / Folio SQLiteは現在非暗号化。バックアップ/復元、誤削除対策、個人情報の説明を整える。
-5. Windows App Certification Kit、依存ライブラリのライセンス/脆弱性監査、プライバシーポリシーとサポート窓口を確認。
-6. パッケージ版を固定してPartner Center登録→認定→公開。これらの操作は未実施。
+1. 1.0.2.1を管理者権限でWACK再実行し、DPI警告の解消を確認する。1.0.2.0のWACKは警告終了。
+2. 依存ライブラリのライセンス/脆弱性監査、プライバシーポリシーとサポート窓口を確認する。
+3. 個人データ保護: Daymark localStorage / Folio SQLiteは現在非暗号化。バックアップ/復元と端末保護の説明を維持する。
+4. 正式なStore署名、Partner Centerパッケージ検証、認定、公開は未実施。公開操作は別途承認があるまで行わない。
 
 ## Microsoft StoreとStripe
 - Microsoft StoreへのMSIX提出にはCA証明書購入は不要。Storeが認定と公開の過程で署名する。

@@ -1,8 +1,8 @@
 # MSIX共通・Ollamaモデル導入ガイド（Daymark AI / Folio AI）
 
-更新日: 2026-10-24 JST
+更新日: 2026-10-29 JST
 ブランチ: `codex/store-ollama-download-20261024`
-候補: `1.0.2.0` x64 / **QA_UNSIGNED / Store未提出**
+候補: `1.0.2.1` x64 / **QA_UNSIGNED / Store未提出**
 
 ## 原則
 - 配布物はWindows向けMSIXに統一。アプリ内にOllamaモデルや数GBの重みを同梱しない。
