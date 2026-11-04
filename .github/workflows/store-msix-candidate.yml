@@ -1,8 +1,8 @@
-name: FolioAI Store Candidate QA UNSIGNED
+name: FolioAI Store Candidate UNSIGNED
 on:
   push:
     branches:
-      - codex/store-msix-20261024
+      - codex/store-ollama-download-20261024
   workflow_dispatch:
 permissions:
   contents: read
@@ -17,25 +17,67 @@ jobs:
         with:
           python-version: '3.12'
           architecture: 'x64'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Unit regression and offline data tests
         shell: pwsh
         run: |
+          node --check store/model_picker.js
+          if ($LASTEXITCODE -ne 0) { throw 'Ollama setup JavaScript syntax check failed' }
+          python -m unittest discover -s tests -p test_ollama.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Ollama installer safety tests failed' }
           python -m unittest discover -s tests -p test_rag.py -v
           if ($LASTEXITCODE -ne 0) { throw 'Offline search and data migration tests failed' }
+          python -m unittest discover -s tests -p test_store.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Store identity and version tests failed' }
+      - name: Windows Edge UI test with mocked Ollama download
+        shell: pwsh
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          if ($LASTEXITCODE -ne 0) { throw 'Playwright test dependency install failed' }
+          node tests/ui_qa.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Windows UI and mocked download tests failed' }
+      - name: Generate and validate optional Store trailer
+        shell: pwsh
+        run: |
+          choco install ffmpeg -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'FFmpeg install failed' }
+          Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
+          Update-SessionEnvironment
+          .\store\generate_store_video.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Store trailer generation or validation failed' }
       - name: Install Windows-only packaging tools
         shell: pwsh
         run: |
           python -m pip install --disable-pip-version-check "pyinstaller==6.22.3" "pywebview==6.2.1" "pillow==12.3.0"
           if ($LASTEXITCODE -ne 0) { throw 'Bundler dependency install failed' }
-      - name: Build bundled Python desktop and QA_UNSIGNED MSIX
+      - name: Build bundled Python desktop and Store candidate unsigned MSIX
         shell: pwsh
         run: |
           .\store\build_msix.ps1 -AppName FolioAI
           if ($LASTEXITCODE -ne 0) { throw 'MSIX build script failed' }
-      - name: Upload unsigned QA package and SHA-256 report
+      - name: Upload unsigned Store candidate and SHA-256 report
         uses: actions/upload-artifact@v4
         with:
-          name: FolioAI_1.0.0.0_x64_QA_UNSIGNED
+          name: FolioAI_1.0.3.0_x64_STORE_CANDIDATE_UNSIGNED
           path: msix-out/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload Windows UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FolioAI_1.0.3.0_Windows_UI_Evidence
+          path: qa-screenshots/*
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Upload Store listing assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: FolioAI_1.0.3.0_Store_Listing_Assets
+          path: |
+            store-assets/**
+            docs/store/**
           if-no-files-found: error
           retention-days: 30

@@ -47,8 +47,10 @@ def main() -> None:
         raise ValueError("Product identity differs from executable name")
     if not re.fullmatch(r"\d+\.\d+\.\d+\.\d+", config["version"]):
         raise ValueError("Version is invalid")
-    if config["release_status"] != "QA_UNSIGNED_HOLD" or config["architecture"] != "x64":
-        raise ValueError("Release status / architecture is not an approved QA candidate")
+    if config["version"].split(".")[3] != "0":
+        raise ValueError("Microsoft Store reserves the fourth package version field; it must be 0")
+    if config["release_status"] != "STORE_CANDIDATE_UNSIGNED" or config["architecture"] != "x64":
+        raise ValueError("Release status / architecture is not an approved Store candidate")
     if not (stage / exe_relative.replace("\\", "/")).is_file():
         raise FileNotFoundError("MSIX launcher EXE is missing: " + exe_relative)
 

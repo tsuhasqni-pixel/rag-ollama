@@ -25,7 +25,7 @@ class OfflineRAGTests(unittest.TestCase):
                 self.assertEqual(server.search(""),[])
 
     def test_no_ollama_call_needed_for_search(self):
-        with patch.object(server.urllib.request,"urlopen",side_effect=AssertionError("must not call Ollama")):
+        with patch.object(server.OLLAMA_OPENER,"open",side_effect=AssertionError("must not call Ollama")):
             with tempfile.TemporaryDirectory() as d:
                 with patch.object(server,"BASE",Path(d)), patch.object(server,"DB",Path(d)/"db.sqlite"):
                     server.add_document("研究","文章検索の練習")
@@ -118,14 +118,14 @@ class OfflineRAGTests(unittest.TestCase):
     def test_optional_ollama_status_offline_and_online(self):
         import io
         import urllib.error
-        with patch.object(server.urllib.request,"urlopen",
+        with patch.object(server.OLLAMA_OPENER,"open",
                           side_effect=urllib.error.URLError("offline")):
             self.assertEqual(server.ollama_status(),{"available":False,"models":[]})
         class Response:
             def __enter__(self):return self
             def __exit__(self,*args):return False
             def read(self,n):return b'{"models":[{"name":"local-small:4b"}]}'
-        with patch.object(server.urllib.request,"urlopen",return_value=Response()) as call:
+        with patch.object(server.OLLAMA_OPENER,"open",return_value=Response()) as call:
             self.assertEqual(server.ollama_status(),
                              {"available":True,"models":["local-small:4b"]})
             self.assertEqual(call.call_args.kwargs["timeout"],2)
