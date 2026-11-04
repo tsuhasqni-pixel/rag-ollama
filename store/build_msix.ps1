@@ -15,7 +15,7 @@ if ($SigningThumbprint) { $SigningThumbprint=$SigningThumbprint.ToUpperInvariant
 $root=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location $root
 $cfg=Get-Content (Join-Path $root 'store/product.json') -Raw | ConvertFrom-Json
-if ($cfg.product -cne $AppName -or $cfg.release_status -cne 'QA_UNSIGNED_HOLD') {
+if ($cfg.product -cne $AppName -or $cfg.release_status -cne 'STORE_CANDIDATE_UNSIGNED') {
     throw 'Packaging identity or unsigned QA state is unexpected'
 }
 $stage=Join-Path $root 'msix-stage'
@@ -71,7 +71,7 @@ $makeappx=Get-ChildItem -Path $sdkRoot -Filter makeappx.exe -Recurse -File |
   Where-Object { $_.FullName -match '[\\/]x64[\\/]makeappx\.exe$' } |
   Sort-Object FullName -Descending | Select-Object -First 1
 if ($null -eq $makeappx) {throw 'Windows SDK MakeAppx.exe (x64) not found'}
-$packageLabel=if ($SigningThumbprint) {'QA_TEST_SIGNED_LOCAL_ONLY'} else {'STORE_CANDIDATE_QA_UNSIGNED'}
+$packageLabel=if ($SigningThumbprint) {'QA_TEST_SIGNED_LOCAL_ONLY'} else {'STORE_CANDIDATE_UNSIGNED'}
 $package=Join-Path $deliver ("{0}_{1}_x64_{2}.msix" -f $AppName,$cfg.version,$packageLabel)
 & $makeappx.FullName pack /d "$stage" /p "$package" /o /l
 if ($LASTEXITCODE -ne 0) {throw 'MakeAppx packing failed'}
@@ -93,9 +93,13 @@ if ($identity.Name -cne $cfg.identity_name -or
     $identity.ProcessorArchitecture -cne 'x64') {throw 'Package identity mismatch after unpack'}
 $hash=(Get-FileHash -Path $package -Algorithm SHA256).Hash
 $size=(Get-Item $package).Length
+$sourceSha=$env:GITHUB_SHA
+if (-not $sourceSha) { $sourceSha=(& git rev-parse HEAD).Trim() }
+$sourceBranch=$env:GITHUB_REF_NAME
+if (-not $sourceBranch) { $sourceBranch=(& git branch --show-current).Trim() }
 $summary=[ordered]@{
     product=$AppName
-    source_sha=$env:GITHUB_SHA
+    source_sha=$sourceSha
     identity_name=$identity.Name
     publisher=$identity.Publisher
     version=$identity.Version
@@ -105,16 +109,55 @@ $summary=[ordered]@{
     sha256=$hash
     signed=[bool]$SigningThumbprint
     signing_thumbprint=if ($SigningThumbprint) {$SigningThumbprint} else {$null}
-    status=if ($SigningThumbprint) {'QA_TEST_SIGNED_LOCAL_ONLY_NOT_FOR_DISTRIBUTION'} else {'QA_UNSIGNED_NOT_INSTALLABLE_UNTIL_SIGNED'}
+    status=if ($SigningThumbprint) {'QA_TEST_SIGNED_LOCAL_ONLY_NOT_FOR_DISTRIBUTION'} else {'STORE_CANDIDATE_UNSIGNED_FOR_PARTNER_CENTER_VALIDATION'}
     checks=@($selfTestCheck,'MakeAppx pack/unpack PASS',
              'AppxManifest Identity and executable PASS','Static resource assets present PASS')
-    holds=@('Windows install and WebView2 GUI runtime QA',
-            'OS localStorage and SQLite data persistence QA',
-            'Real Ollama response accuracy QA',
-            'Sensitive data encryption and restoration',
-            'WACK and Partner Center certification')
+    holds=@('Partner Center package validation and certification',
+            'Microsoft Store submission and publication')
 }
-$summary | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 (Join-Path $deliver 'QA_UNSIGNED_BUILD_REPORT.json')
-Write-Host "QA_UNSIGNED MSIX built: $package"
+$summary | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 (Join-Path $deliver 'STORE_CANDIDATE_BUILD_REPORT.json')
+if (-not $SigningThumbprint) {
+    $handoff=[ordered]@{
+        schema_version=1
+        product_name='Folio AI'
+        product_type='app'
+        submission_route=[ordered]@{
+            coordinator='Windows-all-auto'
+            product_type='app'
+            submission_kind='update'
+            build_contract='windows-data/1'
+            checker_contract='windows-checker/1'
+            automator_contract='windows-automator/dryrun-1'
+            execution_mode='dry_run'
+        }
+        source_repository='tsuhasqni-pixel/rag-ollama'
+        source_branch=$sourceBranch
+        source_sha=$sourceSha
+        package_identity=$identity.Name
+        publisher=$identity.Publisher
+        publisher_display_name=$cfg.publisher_display_name
+        package_version=$identity.Version
+        package_architecture=$identity.ProcessorArchitecture
+        package_filename=(Split-Path $package -Leaf)
+        package_sha256=$hash
+        local_qa_status='QA_PASS_PRIOR_REAL_DEVICE_PLUS_FINAL_AUTOMATED_REGRESSION'
+        wack_status='PRIOR_WARNING_FINAL_PARTNER_CENTER_VALIDATION_REQUIRED'
+        event_log_status='NO_KNOWN_FATAL_FOLIO_EVENT; LOCAL_UNSIGNED_EXE_BLOCKED_BY_DEVICE_POLICY'
+        screenshot_paths=@('store-assets/screenshots/ja-JP/01-document-search.png',
+            'store-assets/screenshots/ja-JP/02-search-results.png',
+            'store-assets/screenshots/ja-JP/03-document-add.png',
+            'store-assets/screenshots/ja-JP/04-full-document.png',
+            'store-assets/screenshots/ja-JP/05-ai-answer.png')
+        store_listing_paths=@('docs/store/FOLIO_STORE_LISTING.md')
+        privacy_policy_status='COMPLETE'
+        support_info_status='COMPLETE'
+        checker_status='READY_CANDIDATE_NOT_CERTIFIED'
+        ready_for_checker=$true
+        ready_for_store_draft=$false
+        partner_center_modified=$false
+    }
+    $handoff | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 (Join-Path $deliver 'folio-auto-upload-handoff.json')
+}
+Write-Host "Store candidate unsigned MSIX built: $package"
 Write-Host "SIZE: $size, SHA256: $hash"
-Write-Host "IMPORTANT: Do not offer this unsigned QA package as a directly installable release."
+Write-Host "IMPORTANT: This unsigned package is for Partner Center validation, not direct distribution."

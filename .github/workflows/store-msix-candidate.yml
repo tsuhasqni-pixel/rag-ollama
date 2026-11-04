@@ -1,4 +1,4 @@
-name: FolioAI Store Candidate QA UNSIGNED
+name: FolioAI Store Candidate UNSIGNED
 on:
   push:
     branches:
@@ -29,6 +29,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Ollama installer safety tests failed' }
           python -m unittest discover -s tests -p test_rag.py -v
           if ($LASTEXITCODE -ne 0) { throw 'Offline search and data migration tests failed' }
+          python -m unittest discover -s tests -p test_store.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Store identity and version tests failed' }
       - name: Windows Edge UI test with mocked Ollama download
         shell: pwsh
         run: |
@@ -41,15 +43,15 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check "pyinstaller==6.22.3" "pywebview==6.2.1" "pillow==12.3.0"
           if ($LASTEXITCODE -ne 0) { throw 'Bundler dependency install failed' }
-      - name: Build bundled Python desktop and QA_UNSIGNED MSIX
+      - name: Build bundled Python desktop and Store candidate unsigned MSIX
         shell: pwsh
         run: |
           .\store\build_msix.ps1 -AppName FolioAI
           if ($LASTEXITCODE -ne 0) { throw 'MSIX build script failed' }
-      - name: Upload unsigned QA package and SHA-256 report
+      - name: Upload unsigned Store candidate and SHA-256 report
         uses: actions/upload-artifact@v4
         with:
-          name: FolioAI_1.0.2.1_x64_QA_UNSIGNED
+          name: FolioAI_1.0.3.0_x64_STORE_CANDIDATE_UNSIGNED
           path: msix-out/*
           if-no-files-found: error
           retention-days: 30
@@ -57,7 +59,16 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: FolioAI_1.0.2.1_Windows_UI_Evidence
+          name: FolioAI_1.0.3.0_Windows_UI_Evidence
           path: qa-screenshots/*
           if-no-files-found: warn
+          retention-days: 30
+      - name: Upload Store listing assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: FolioAI_1.0.3.0_Store_Listing_Assets
+          path: |
+            store-assets/**
+            docs/store/**
+          if-no-files-found: error
           retention-days: 30

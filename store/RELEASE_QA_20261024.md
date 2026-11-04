@@ -1,4 +1,6 @@
-# Microsoft Store MSIX — Windows候補と出荷HOLD
+# Microsoft Store MSIX — 1.0.2.1 historical QA evidence
+
+> Historical evidence only. The current Folio Store handoff is version 1.0.3.0 under `docs/store/`. Do not upload the 1.0.2.1 artifact as the final candidate.
 
 更新日: 2026-10-29 JST
 ブランチ: codex/store-ollama-download-20261024（main/release直変更なし）

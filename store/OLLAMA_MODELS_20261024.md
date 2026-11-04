@@ -2,7 +2,9 @@
 
 更新日: 2026-10-29 JST
 ブランチ: `codex/store-ollama-download-20261024`
-候補: `1.0.2.1` x64 / **QA_UNSIGNED / Store未提出**
+現在のStore候補: `1.0.3.0` x64 / **STORE_CANDIDATE_UNSIGNED / Store未提出**
+
+`1.0.2.1` は実機QA履歴としてのみ保持し、Storeへ渡す最終候補ではありません。
 
 ## 原則
 - 配布物はWindows向けMSIXに統一。アプリ内にOllamaモデルや数GBの重みを同梱しない。

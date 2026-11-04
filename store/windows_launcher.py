@@ -4,8 +4,8 @@ Windows Store packaging:
   pyinstaller --noconfirm --clean --windowed --onedir --name <Name> ...
 MSIX may be submitted UNSIGNED to Store; never label it a signed installable build.
 
-The fixed origin is intentional: Daymark's localStorage is scoped to host+port.
-Changing the port would hide existing diary data on the next app launch.
+The fixed origin is intentional so application storage and API access remain
+scoped to one local origin across launches.
 """
 from __future__ import annotations
 
