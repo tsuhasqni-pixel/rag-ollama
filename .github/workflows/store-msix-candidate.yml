@@ -38,6 +38,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Playwright test dependency install failed' }
           node tests/ui_qa.cjs
           if ($LASTEXITCODE -ne 0) { throw 'Windows UI and mocked download tests failed' }
+      - name: Generate and validate optional Store trailer
+        shell: pwsh
+        run: |
+          .\store\generate_store_video.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Store trailer generation or validation failed' }
       - name: Install Windows-only packaging tools
         shell: pwsh
         run: |

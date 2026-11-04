@@ -55,6 +55,13 @@ Ollama本体は自動インストールしません。未導入時は公式案�
 4. `04-full-document.png` — 全文表示
 5. `05-ai-answer.png` — ローカルAI回答と参照資料
 
+### 任意トレーラー
+
+- Title: `Folio AI - ローカル資料検索`
+- Video: `store-assets/video/FolioAI_Store_Trailer_ja-JP.mp4`
+- Thumbnail: `store-assets/video/FolioAI_Store_Trailer_Thumbnail_ja-JP.png`
+- 動画はWindows Actionsで生成し、1920×1080 MP4/H.264、AAC 48kHz stereo、60秒未満、2GB未満を自動検証します。任意素材であり、今回Partner Centerへはアップロードしません。
+
 ## English
 
 ### Short description

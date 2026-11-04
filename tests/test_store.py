@@ -33,6 +33,9 @@ class StoreConfigurationTests(unittest.TestCase):
         self.assertNotRegex(workflow, re.compile(r"FolioAI_1\.0\.2\.1"))
         script = (ROOT / "store" / "build_msix.ps1").read_text(encoding="utf-8")
         self.assertIn("STORE_CANDIDATE_UNSIGNED", script)
+        video_script = (ROOT / "store" / "generate_store_video.ps1").read_text(encoding="utf-8")
+        self.assertIn("1920", video_script)
+        self.assertIn("TECHNICALLY_READY_FOR_OPTIONAL_STORE_UPLOAD_NOT_UPLOADED", video_script)
 
 
 if __name__ == "__main__":
