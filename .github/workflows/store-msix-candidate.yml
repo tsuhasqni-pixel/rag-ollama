@@ -41,6 +41,10 @@ jobs:
       - name: Generate and validate optional Store trailer
         shell: pwsh
         run: |
+          choco install ffmpeg -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'FFmpeg install failed' }
+          Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
+          Update-SessionEnvironment
           .\store\generate_store_video.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Store trailer generation or validation failed' }
       - name: Install Windows-only packaging tools
